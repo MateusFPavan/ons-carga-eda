@@ -119,6 +119,33 @@
     "status": "ok",
     "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/curva-carga-ho/CURVA_CARGA_2026.parquet"
   },
+  "custo/cmo_semanal_2024.parquet": {
+    "downloaded_at_local": "2026-07-17T11:24:34.558156-03:00",
+    "downloaded_at_utc": "2026-07-17T14:24:34.558156+00:00",
+    "fonte": "ONS Dados Abertos",
+    "sha256": "4dde295936633d18cf17867ec922e5a6855e1ee82f66b417a2bb9eab77bf7d78",
+    "size_bytes": 6683,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_se/CMO_SEMANAL_2024.parquet"
+  },
+  "custo/cmo_semi_horario_2024.parquet": {
+    "downloaded_at_local": "2026-07-17T11:24:33.518862-03:00",
+    "downloaded_at_utc": "2026-07-17T14:24:33.519901+00:00",
+    "fonte": "ONS Dados Abertos",
+    "sha256": "05345ccb0e1f2730ee3cb6105a446c3a5a4a1e60416f00b5fb2c635093af7ec1",
+    "size_bytes": 391724,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_tm/CMO_SEMIHORARIO_2024.parquet"
+  },
+  "custo/cvu_usina_termica_2024.parquet": {
+    "downloaded_at_local": "2026-07-17T11:24:35.744048-03:00",
+    "downloaded_at_utc": "2026-07-17T14:24:35.744048+00:00",
+    "fonte": "ONS Dados Abertos",
+    "sha256": "f8fd4eef40ea3b9c939211b38b2628d4569778cf3730ebc06eb998c9106ad4d1",
+    "size_bytes": 26001,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cvu_usitermica_se/CVU_USINA_TERMICA_2024.parquet"
+  },
   "temperatura/era5_temperature_2m_Belo_Horizonte_2024_2025.json": {
     "downloaded_at_local": "2026-07-17T08:45:32.914734-03:00",
     "downloaded_at_utc": "2026-07-17T11:45:32.914734+00:00",

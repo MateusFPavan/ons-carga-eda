@@ -16,8 +16,8 @@ produz o mesmo arquivo.
   extraído do parquet ou do manifesto, listada aqui como contexto fixo)
 - Arquivos: 12, anos cobertos: 2015–2026 (12 arquivos, 1 por ano)
 - Snapshot baixado entre `2026-07-16T20:06:20.964290-03:00` e `2026-07-16T20:06:42.927332-03:00`
-- SHA-256 do `MANIFEST.json` neste momento: `7d73b975aa6b9da6cd7245bafb120c32fc97d4269c08faee545b210e633cb723`
-- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 41
+- SHA-256 do `MANIFEST.json` neste momento: `222d23891efa531ab44dd9e155378a54117291e7f27235d530ffce7a346481aa`
+- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 44
 
 **Aviso — republicação em lote (recalculado, não copiado):** agrupando os 12
 arquivos por data (não hora) do cabeçalho HTTP `Last-Modified`:
@@ -259,6 +259,115 @@ diretamente comparáveis — comparam pares de séries diferentes.
 
 ---
 
+## J. Custo de despacho
+
+### J1. Fontes sondadas
+
+Documentado a partir da página de cada dataset e do respectivo dicionário de
+dados (não extraído do parquet — contexto fixo, como a licença na seção A):
+
+| Dataset | URL | Licença | Anos disponíveis (portal) |
+|---|---|---|---|
+| CMO Semi-Horário | https://dados.ons.org.br/dataset/cmo-semi-horario | CC-BY | 2020–2026 |
+| CMO Semanal | https://dados.ons.org.br/dataset/cmo-semanal | CC-BY | 2005–2026 |
+| CVU das Usinas Térmicas | https://dados.ons.org.br/dataset/cvu-usitermica | CC-BY | 2005–2026 |
+
+**Decisão tomada (registrada, não questionada aqui):** usar CMO Semi-Horário
+como preço do erro de previsão, agregado para grade horária. CVU descartado
+(exigiria modelar ordem de mérito). CMO Semanal descartado (granularidade
+insuficiente).
+
+### J2. Fato bruto vs. regra derivada — CMO Semi-Horário, amostra 2024
+
+**Fato bruto — granularidade nativa:** diferença entre timestamps distintos
+consecutivos é de 1.800 segundos (30 minutos)
+na quase totalidade dos casos. Valores de diferença distintos observados no
+arquivo inteiro: 1.800, 88.200 segundos.
+
+**Fato bruto — subsistemas observados:** `N`, `NE`, `S`, `SE` —
+4 subsistemas, mesmos códigos do dataset de carga.
+Linhas por subsistema: N=17.376, NE=17.376, S=17.376, SE=17.376.
+
+**Fato bruto — unidade:** R$/MWh, conforme dicionário de dados oficial
+(`DicionarioDados_Cmo_Semi_Horario.pdf`).
+
+**REGRA (decisão, não fato do dado):** para casar com a grade horária da
+carga, os dois registros de 30 minutos de cada hora precisam ser agregados em
+1 valor horário. O método de agregação (ex.: média das duas semi-horas) é uma
+escolha de modelagem — **não foi aplicado nesta sondagem** e não está,
+portanto, refletido em nenhum número desta seção.
+
+### J3. Lacunas e anomalias — amostra 2024 (recalculado)
+
+Período coberto pela amostra: `2024-01-01 00:00:00` a `2024-12-31 23:30:00`,
+69.504 linhas totais.
+
+Calendário de 366 dias no ano da amostra;
+362 dias com pelo menos 1 registro por subsistema
+(checado no subsistema SE). **4 dias inteiramente
+ausentes**, gerados por código (calendário completo do ano menos dias
+presentes):
+
+- 2024-02-08
+- 2024-02-17
+- 2024-07-13
+- 2024-12-29
+
+Grade teoricamente completa (dias de calendário × 48 × 4 subsistemas):
+70.272 linhas. Observado: 69.504.
+
+**`val_cmo`, 69.504 valores válidos, 0 nulos:**
+77 negativos, 8.989 zeros.
+
+**Nota a registrar:** CMO zero e CMO negativo são fisicamente reais no SIN
+(vertimento / sobra de energia) — não são erro de dado. Numa hora de CMO
+zero, o custo do erro de previsão pela fórmula `|erro_MW| × CMO × 1h` também
+é zero. Isso é consequência da suposição de precificação adotada (seção J5),
+não um problema do dado.
+
+### J4. Divergência de dicionário
+
+O dicionário de dados do CMO Semanal declara `val_cmomediasemanal` em
+**R$/MW**, enquanto as outras 3 colunas de valor do mesmo dataset
+(`val_cmoleve`, `val_cmomedia`, `val_cmopesada`) são declaradas em
+**R$/MWh** — mesmo dicionário, mesma tabela, unidades diferentes descritas
+para colunas do mesmo tipo de grandeza. Registrado como está escrito no PDF
+oficial; não investigado se é erro de digitação ou diferença real.
+
+Este é o 3º caso, nesta sondagem, de o dicionário oficial do ONS divergir de
+si mesmo ou dos dados: (1) seção B — coluna declarada `FLOAT` armazenada como
+texto em 2015–2024; (2) seção B — 87 strings vazias numa coluna declarada
+`Permite valor nulo: Não`; (3) esta.
+
+### J5. Limite da métrica de custo — registrado literalmente
+
+Nenhum dos três datasets sondados (CMO Semi-Horário, CMO Semanal, CVU)
+contém uma ligação entre erro de carga (MW) e custo (R$) já calculada.
+Nenhum contém o conceito de "erro de previsão". Os três contêm **preço**
+(R$/MWh, ou R$/MW numa coluna — seção J4). A métrica de negócio do projeto
+é, portanto, um **modelo declarado**, não um dado observado:
+
+> custo = |erro_MW| × CMO_horário × 1h
+
+sob a suposição de que o erro de previsão é valorado ao custo marginal de
+operação do subsistema naquela hora. **Isto não é custo de despacho
+realizado — é uma estimativa sob suposição explícita.**
+
+### J6. Cobertura cruzada — carga SE/CO × CMO Semi-Horário
+
+| Fonte | Período |
+|---|---|
+| Carga SE/CO (recalculado na seção C) | `2015-01-01 00:00:00` a `2026-07-15 23:00:00` |
+| CMO Semi-Horário, amostra efetivamente baixada e verificada | `2024-01-01 00:00:00` a `2024-12-31 23:30:00` (ano 2024 apenas) |
+| CMO Semi-Horário, cobertura declarada pelo portal (não verificada ano a ano) | 2020–2026 |
+
+**Registrado explicitamente:** só o ano de 2024 foi baixado e verificado em
+detalhe (esta seção). A interseção 2020–2026 entre carga e CMO Semi-Horário
+vem da listagem de recursos do portal do ONS, **não** de download e checagem
+ano a ano de 2020, 2021, 2022, 2023, 2025 e 2026.
+
+---
+
 ## H. Decisões já tomadas
 
 | Decisão | Justificativa |
@@ -270,14 +379,20 @@ diretamente comparáveis — comparam pares de séries diferentes.
 | Viradas de DST: flag `is_dst_transition`, excluídas como origem de previsão; vazios de outubro NÃO imputados | Preserva o fato bruto em vez de mascará-lo com um valor inventado |
 | Temperatura: camada secundária 2024+, não no modelo principal | Cobertura da previsão-24h só é completa a partir de 2024-01-20 (seção G) |
 | Primeiro dia elegível como alvo de previsão day-ahead: 2024-01-20, não 2024-01-19 | 2024-01-19 tem cobertura parcial (ver seção G); dia parcial é contexto, não alvo |
-| Custo de despacho: proxy via CMO/CVU do ONS | A verificar — não sondado ainda (ver seção I) |
+| Custo: CMO Semi-Horário agregado para grade horária; CVU e CMO Semanal descartados | CVU exigiria modelar ordem de mérito; CMO Semanal tem granularidade insuficiente (seção J1) |
+| Métrica de custo aplicada só ao período de teste (2020+), não ao treino | CMO Semi-Horário não cobre 2015–2019 (seção J1/J6) |
+| Modelo principal (2015–2026) avaliado por MAPE/RMSE; custo é camada de avaliação, não de treino | Separa a qualidade estatística da previsão (todo o histórico) da tradução em custo (limitada pela cobertura do CMO) |
 
 ---
 
 ## I. Itens abertos
 
 - NE, mínimo histórico em 2018-03-21: sem explicação (seção E).
-- CMO/CVU do ONS como proxy de custo de despacho: ainda não sondado.
+- Interseção carga × CMO Semi-Horário não confirmada ano a ano — só 2024 foi
+  baixado e verificado; 2020, 2021, 2022, 2023, 2025 e 2026 constam apenas na
+  listagem do portal (seção J6).
+- Método de agregação do CMO Semi-Horário de 30 minutos para 60 minutos ainda a
+  definir (seção J2) — nenhum método foi aplicado nesta sondagem.
 - Datas de vigência do DST: confirmado nesta geração que são produzidas por
   `zoneinfo`/IANA dentro do próprio `src/gerar_facts.py`
   (função `gerar_timestamps_especiais_dst`), não hardcoded — ver seção D.

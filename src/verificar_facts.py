@@ -16,6 +16,7 @@ import pandas as pd
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 TEMP_DIR = RAW_DIR / "temperatura"
+CUSTO_DIR = RAW_DIR / "custo"
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 FACTS_PATH = REPORTS_DIR / "FACTS.md"
 ANOS = list(range(2015, 2027))
@@ -134,6 +135,41 @@ def main():
             campos = [c.strip() for c in linha.strip("|").split("|")]
             mae_facts = float(campos[2].replace(".", "").replace(",", "."))
             checar(f"{cidade} MAE", round(mae, 4), mae_facts)
+
+    print("\n=== J. custo de despacho (recomputo independente do parquet CMO Semi-Horário) ===")
+    fpath = CUSTO_DIR / "cmo_semi_horario_2024.parquet"
+    if fpath.exists():
+        dfc = pd.read_parquet(fpath)
+        dfc["id_subsistema"] = dfc["id_subsistema"].astype(str)
+
+        n_linhas_real = len(dfc)
+        m = re.search(r"(\d[\d\.]*) linhas totais", texto)
+        n_linhas_facts = int(m.group(1).replace(".", "")) if m else None
+        checar("CMO n_linhas", n_linhas_real, n_linhas_facts)
+
+        val = pd.to_numeric(dfc["val_cmo"], errors="coerce")
+        n_neg_real = int((val < 0).sum())
+        n_zero_real = int((val == 0).sum())
+        m_neg = re.search(r"(\d+) negativos, ([\d\.]+) zeros", texto)
+        if m_neg:
+            checar("CMO n_negativos", n_neg_real, int(m_neg.group(1)))
+            checar("CMO n_zeros", n_zero_real, int(m_neg.group(2).replace(".", "")))
+
+        # dias inteiramente ausentes (subsistema SE), recomputado do zero
+        sub_se = dfc[dfc["id_subsistema"] == "SE"].copy()
+        sub_se["dia"] = sub_se["din_instante"].dt.date
+        dias_presentes = set(sub_se["dia"].unique())
+        ano_ref = sub_se["dia"].min().year
+        calendario = set(pd.date_range(f"{ano_ref}-01-01", f"{ano_ref}-12-31", freq="D").date)
+        dias_ausentes_real = sorted(str(d) for d in (calendario - dias_presentes))
+        dias_ausentes_facts = re.findall(r"^- (\d{4}-\d{2}-\d{2})$", texto, re.MULTILINE)
+        # a lista de dias ausentes no FACTS.md aparece logo após "ausentes**, gerados por código"
+        idx_secao = texto.find("dias inteiramente")
+        trecho = texto[idx_secao:idx_secao + 400] if idx_secao != -1 else ""
+        dias_facts_secao = re.findall(r"- (\d{4}-\d{2}-\d{2})", trecho)
+        checar("CMO dias ausentes (lista)", dias_ausentes_real, dias_facts_secao)
+    else:
+        print(f"[AUSENTE] {fpath} não encontrado — seção J não verificada")
 
     print("\n=== RESUMO ===")
     if erros:

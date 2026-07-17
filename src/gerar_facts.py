@@ -21,6 +21,7 @@ import pandas as pd
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 TEMP_DIR = RAW_DIR / "temperatura"
+CUSTO_DIR = RAW_DIR / "custo"
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 MANIFEST_PATH = RAW_DIR / "MANIFEST.json"
 ANOS = list(range(2015, 2027))
@@ -526,10 +527,86 @@ def secao_g_temperatura() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# J. Custo de despacho (a partir da amostra 2024 já baixada em data/raw/custo/)
+# ---------------------------------------------------------------------------
+
+def secao_j_custo(cobertura_carga: dict) -> dict:
+    resultado = {"arquivo_ausente": None}
+
+    fpath = CUSTO_DIR / "cmo_semi_horario_2024.parquet"
+    if not fpath.exists():
+        resultado["arquivo_ausente"] = str(fpath)
+        return resultado
+
+    df = pd.read_parquet(fpath)
+    df["id_subsistema"] = df["id_subsistema"].astype(str)
+    n_linhas = int(len(df))
+
+    ids_observados = sorted(df["id_subsistema"].unique().tolist())
+
+    # granularidade: diferenças entre timestamps distintos (todo o arquivo, não por subsistema)
+    ts_distintos = df["din_instante"].drop_duplicates().sort_values().reset_index(drop=True)
+    diffs = ts_distintos.diff().dropna().dt.total_seconds()
+    diffs_distintas = sorted(diffs.unique().tolist())
+    diff_modal = diffs.mode().iloc[0] if len(diffs) else None
+
+    primeiro_instante = str(df["din_instante"].min())
+    ultimo_instante = str(df["din_instante"].max())
+
+    # dias inteiramente ausentes (checado num subsistema, já que todos têm a mesma contagem —
+    # confirmado abaixo por linhas_por_subsistema)
+    linhas_por_subsistema = df.groupby("id_subsistema").size().to_dict()
+    linhas_por_subsistema = {k: int(v) for k, v in linhas_por_subsistema.items()}
+
+    sub_ref = df[df["id_subsistema"] == "SE"].copy()
+    sub_ref["dia"] = sub_ref["din_instante"].dt.date
+    dias_presentes = set(sub_ref["dia"].unique())
+    ano_calendario = pd.date_range(
+        f"{sub_ref['dia'].min().year}-01-01", f"{sub_ref['dia'].min().year}-12-31", freq="D"
+    ).date
+    dias_ausentes = sorted(set(ano_calendario) - dias_presentes)
+    dias_esperados_calendario = len(ano_calendario)
+    dias_presentes_n = len(dias_presentes)
+
+    n_esperado_grade_completa = dias_esperados_calendario * 48 * len(ids_observados)
+
+    # nulos/negativos/zeros em val_cmo
+    val = pd.to_numeric(df["val_cmo"], errors="coerce")
+    n_nulo = int(df["val_cmo"].isna().sum())
+    n_negativos = int((val < 0).sum())
+    n_zeros = int((val == 0).sum())
+    n_validos = int(val.notna().sum())
+
+    # cobertura cruzada com a carga SE/CO (já calculada na seção C)
+    carga_se = cobertura_carga.get("SE", {})
+
+    resultado.update({
+        "n_linhas": n_linhas,
+        "ids_observados": ids_observados,
+        "linhas_por_subsistema": linhas_por_subsistema,
+        "diffs_segundos_distintas": diffs_distintas,
+        "diff_modal_segundos": float(diff_modal) if diff_modal is not None else None,
+        "primeiro_instante": primeiro_instante,
+        "ultimo_instante": ultimo_instante,
+        "dias_calendario_no_periodo": dias_esperados_calendario,
+        "dias_presentes": dias_presentes_n,
+        "dias_ausentes": [str(d) for d in dias_ausentes],
+        "n_esperado_grade_completa_30min": n_esperado_grade_completa,
+        "val_cmo_n_validos": n_validos,
+        "val_cmo_n_nulo": n_nulo,
+        "val_cmo_n_negativos": n_negativos,
+        "val_cmo_n_zeros": n_zeros,
+        "carga_se_primeiro_instante": carga_se.get("primeiro_instante"),
+        "carga_se_ultimo_instante": carga_se.get("ultimo_instante"),
+    })
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -793,6 +870,119 @@ def renderizar(a, b, c, d, e, f, g, timestamps_dst_1519) -> str:
     W("---")
     W("")
 
+    # J
+    W("## J. Custo de despacho")
+    W("")
+    if j.get("arquivo_ausente"):
+        W(f"**Amostra ausente** (`{j['arquivo_ausente']}`) — seção não pôde ser calculada.")
+        W("")
+    else:
+        W("### J1. Fontes sondadas")
+        W("")
+        W("Documentado a partir da página de cada dataset e do respectivo dicionário de")
+        W("dados (não extraído do parquet — contexto fixo, como a licença na seção A):")
+        W("")
+        W("| Dataset | URL | Licença | Anos disponíveis (portal) |")
+        W("|---|---|---|---|")
+        W("| CMO Semi-Horário | https://dados.ons.org.br/dataset/cmo-semi-horario | CC-BY | 2020–2026 |")
+        W("| CMO Semanal | https://dados.ons.org.br/dataset/cmo-semanal | CC-BY | 2005–2026 |")
+        W("| CVU das Usinas Térmicas | https://dados.ons.org.br/dataset/cvu-usitermica | CC-BY | 2005–2026 |")
+        W("")
+        W("**Decisão tomada (registrada, não questionada aqui):** usar CMO Semi-Horário")
+        W("como preço do erro de previsão, agregado para grade horária. CVU descartado")
+        W("(exigiria modelar ordem de mérito). CMO Semanal descartado (granularidade")
+        W("insuficiente).")
+        W("")
+        W("### J2. Fato bruto vs. regra derivada — CMO Semi-Horário, amostra 2024")
+        W("")
+        W(f"**Fato bruto — granularidade nativa:** diferença entre timestamps distintos")
+        W(f"consecutivos é de {fmt_int(int(j['diff_modal_segundos']))} segundos ({int(j['diff_modal_segundos']//60)} minutos)")
+        W(f"na quase totalidade dos casos. Valores de diferença distintos observados no")
+        W(f"arquivo inteiro: {', '.join(fmt_int(int(x)) for x in j['diffs_segundos_distintas'])} segundos.")
+        W("")
+        W(f"**Fato bruto — subsistemas observados:** `{'`, `'.join(j['ids_observados'])}` —")
+        W(f"{len(j['ids_observados'])} subsistemas, mesmos códigos do dataset de carga.")
+        W(f"Linhas por subsistema: {', '.join(f'{k}={fmt_int(v)}' for k, v in sorted(j['linhas_por_subsistema'].items()))}.")
+        W("")
+        W("**Fato bruto — unidade:** R$/MWh, conforme dicionário de dados oficial")
+        W("(`DicionarioDados_Cmo_Semi_Horario.pdf`).")
+        W("")
+        W("**REGRA (decisão, não fato do dado):** para casar com a grade horária da")
+        W("carga, os dois registros de 30 minutos de cada hora precisam ser agregados em")
+        W("1 valor horário. O método de agregação (ex.: média das duas semi-horas) é uma")
+        W("escolha de modelagem — **não foi aplicado nesta sondagem** e não está,")
+        W("portanto, refletido em nenhum número desta seção.")
+        W("")
+        W("### J3. Lacunas e anomalias — amostra 2024 (recalculado)")
+        W("")
+        W(f"Período coberto pela amostra: `{j['primeiro_instante']}` a `{j['ultimo_instante']}`,")
+        W(f"{fmt_int(j['n_linhas'])} linhas totais.")
+        W("")
+        W(f"Calendário de {fmt_int(j['dias_calendario_no_periodo'])} dias no ano da amostra;")
+        W(f"{fmt_int(j['dias_presentes'])} dias com pelo menos 1 registro por subsistema")
+        W(f"(checado no subsistema SE). **{len(j['dias_ausentes'])} dias inteiramente")
+        W("ausentes**, gerados por código (calendário completo do ano menos dias")
+        W("presentes):")
+        W("")
+        for dia in j["dias_ausentes"]:
+            W(f"- {dia}")
+        W("")
+        W(f"Grade teoricamente completa (dias de calendário × 48 × {len(j['ids_observados'])} subsistemas):")
+        W(f"{fmt_int(j['n_esperado_grade_completa_30min'])} linhas. Observado: {fmt_int(j['n_linhas'])}.")
+        W("")
+        W(f"**`val_cmo`, {fmt_int(j['val_cmo_n_validos'])} valores válidos, {j['val_cmo_n_nulo']} nulos:**")
+        W(f"{j['val_cmo_n_negativos']} negativos, {fmt_int(j['val_cmo_n_zeros'])} zeros.")
+        W("")
+        W("**Nota a registrar:** CMO zero e CMO negativo são fisicamente reais no SIN")
+        W("(vertimento / sobra de energia) — não são erro de dado. Numa hora de CMO")
+        W("zero, o custo do erro de previsão pela fórmula `|erro_MW| × CMO × 1h` também")
+        W("é zero. Isso é consequência da suposição de precificação adotada (seção J5),")
+        W("não um problema do dado.")
+        W("")
+        W("### J4. Divergência de dicionário")
+        W("")
+        W("O dicionário de dados do CMO Semanal declara `val_cmomediasemanal` em")
+        W("**R$/MW**, enquanto as outras 3 colunas de valor do mesmo dataset")
+        W("(`val_cmoleve`, `val_cmomedia`, `val_cmopesada`) são declaradas em")
+        W("**R$/MWh** — mesmo dicionário, mesma tabela, unidades diferentes descritas")
+        W("para colunas do mesmo tipo de grandeza. Registrado como está escrito no PDF")
+        W("oficial; não investigado se é erro de digitação ou diferença real.")
+        W("")
+        W("Este é o 3º caso, nesta sondagem, de o dicionário oficial do ONS divergir de")
+        W("si mesmo ou dos dados: (1) seção B — coluna declarada `FLOAT` armazenada como")
+        W("texto em 2015–2024; (2) seção B — 87 strings vazias numa coluna declarada")
+        W("`Permite valor nulo: Não`; (3) esta.")
+        W("")
+        W("### J5. Limite da métrica de custo — registrado literalmente")
+        W("")
+        W("Nenhum dos três datasets sondados (CMO Semi-Horário, CMO Semanal, CVU)")
+        W("contém uma ligação entre erro de carga (MW) e custo (R$) já calculada.")
+        W("Nenhum contém o conceito de \"erro de previsão\". Os três contêm **preço**")
+        W("(R$/MWh, ou R$/MW numa coluna — seção J4). A métrica de negócio do projeto")
+        W("é, portanto, um **modelo declarado**, não um dado observado:")
+        W("")
+        W("> custo = |erro_MW| × CMO_horário × 1h")
+        W("")
+        W("sob a suposição de que o erro de previsão é valorado ao custo marginal de")
+        W("operação do subsistema naquela hora. **Isto não é custo de despacho")
+        W("realizado — é uma estimativa sob suposição explícita.**")
+        W("")
+        W("### J6. Cobertura cruzada — carga SE/CO × CMO Semi-Horário")
+        W("")
+        W("| Fonte | Período |")
+        W("|---|---|")
+        W(f"| Carga SE/CO (recalculado na seção C) | `{j['carga_se_primeiro_instante']}` a `{j['carga_se_ultimo_instante']}` |")
+        W(f"| CMO Semi-Horário, amostra efetivamente baixada e verificada | `{j['primeiro_instante']}` a `{j['ultimo_instante']}` (ano 2024 apenas) |")
+        W("| CMO Semi-Horário, cobertura declarada pelo portal (não verificada ano a ano) | 2020–2026 |")
+        W("")
+        W("**Registrado explicitamente:** só o ano de 2024 foi baixado e verificado em")
+        W("detalhe (esta seção). A interseção 2020–2026 entre carga e CMO Semi-Horário")
+        W("vem da listagem de recursos do portal do ONS, **não** de download e checagem")
+        W("ano a ano de 2020, 2021, 2022, 2023, 2025 e 2026.")
+        W("")
+    W("---")
+    W("")
+
     # H
     W("## H. Decisões já tomadas")
     W("")
@@ -805,7 +995,9 @@ def renderizar(a, b, c, d, e, f, g, timestamps_dst_1519) -> str:
     W("| Viradas de DST: flag `is_dst_transition`, excluídas como origem de previsão; vazios de outubro NÃO imputados | Preserva o fato bruto em vez de mascará-lo com um valor inventado |")
     W("| Temperatura: camada secundária 2024+, não no modelo principal | Cobertura da previsão-24h só é completa a partir de 2024-01-20 (seção G) |")
     W("| Primeiro dia elegível como alvo de previsão day-ahead: 2024-01-20, não 2024-01-19 | 2024-01-19 tem cobertura parcial (ver seção G); dia parcial é contexto, não alvo |")
-    W("| Custo de despacho: proxy via CMO/CVU do ONS | A verificar — não sondado ainda (ver seção I) |")
+    W("| Custo: CMO Semi-Horário agregado para grade horária; CVU e CMO Semanal descartados | CVU exigiria modelar ordem de mérito; CMO Semanal tem granularidade insuficiente (seção J1) |")
+    W("| Métrica de custo aplicada só ao período de teste (2020+), não ao treino | CMO Semi-Horário não cobre 2015–2019 (seção J1/J6) |")
+    W("| Modelo principal (2015–2026) avaliado por MAPE/RMSE; custo é camada de avaliação, não de treino | Separa a qualidade estatística da previsão (todo o histórico) da tradução em custo (limitada pela cobertura do CMO) |")
     W("")
     W("---")
     W("")
@@ -814,7 +1006,11 @@ def renderizar(a, b, c, d, e, f, g, timestamps_dst_1519) -> str:
     W("## I. Itens abertos")
     W("")
     W("- NE, mínimo histórico em 2018-03-21: sem explicação (seção E).")
-    W("- CMO/CVU do ONS como proxy de custo de despacho: ainda não sondado.")
+    W("- Interseção carga × CMO Semi-Horário não confirmada ano a ano — só 2024 foi")
+    W("  baixado e verificado; 2020, 2021, 2022, 2023, 2025 e 2026 constam apenas na")
+    W("  listagem do portal (seção J6).")
+    W("- Método de agregação do CMO Semi-Horário de 30 minutos para 60 minutos ainda a")
+    W("  definir (seção J2) — nenhum método foi aplicado nesta sondagem.")
     W("- Datas de vigência do DST: confirmado nesta geração que são produzidas por")
     W("  `zoneinfo`/IANA dentro do próprio `src/gerar_facts.py`")
     W("  (função `gerar_timestamps_especiais_dst`), não hardcoded — ver seção D.")
@@ -840,8 +1036,9 @@ def main():
     e = secao_e_anomalias(full, datas_transicao)
     f = secao_f_efeito_dst(full, timestamps_dst_1519)
     g = secao_g_temperatura()
+    j = secao_j_custo(c)
 
-    conteudo = renderizar(a, b, c, d, e, f, g, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")
