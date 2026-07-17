@@ -451,7 +451,7 @@ documentar o contrário, a métrica de custo precisa ser recalculada.
 | Viradas de DST: flag `is_dst_transition`, excluídas como origem de previsão; vazios de outubro NÃO imputados | Preserva o fato bruto em vez de mascará-lo com um valor inventado |
 | Temperatura: camada secundária 2024+, não no modelo principal | Cobertura da previsão-24h só é completa a partir de 2024-01-20 (seção G) |
 | Primeiro dia elegível como alvo de previsão day-ahead: 2024-01-20, não 2024-01-19 | 2024-01-19 tem cobertura parcial (ver seção G); dia parcial é contexto, não alvo |
-| Custo: CMO Semi-Horário agregado para grade horária; CVU e CMO Semanal descartados | CVU exigiria modelar ordem de mérito; CMO Semanal tem granularidade insuficiente (seção J1) |
+| Custo: CMO Semi-Horário agregado para grade horária pela MÉDIA das 2 semi-horas; CVU e CMO Semanal descartados | CVU exigiria modelar ordem de mérito; CMO Semanal tem granularidade insuficiente (seção J1); média testada contra máximo e primeira semi-hora, diferença de custo total pequena (seção K1) |
 | Métrica de custo aplicada só ao período de teste (2020+), não ao treino | CMO Semi-Horário não cobre 2015–2019 (seção J1/J6) |
 | Modelo principal (2015–2026) avaliado por MAPE/RMSE; custo é camada de avaliação, não de treino | Separa a qualidade estatística da previsão (todo o histórico) da tradução em custo (limitada pela cobertura do CMO) |
 
@@ -463,8 +463,9 @@ documentar o contrário, a métrica de custo precisa ser recalculada.
 - Interseção carga × CMO Semi-Horário não confirmada ano a ano — só 2024 foi
   baixado e verificado; 2020, 2021, 2022, 2023, 2025 e 2026 constam apenas na
   listagem do portal (seção J6).
-- Método de agregação do CMO Semi-Horário de 30 minutos para 60 minutos ainda a
-  definir (seção J2) — nenhum método foi aplicado nesta sondagem.
+- Fuso do CMO Semi-Horário: fato derivado por evidência empírica (seção K3),
+  não declarado por nenhuma fonte documental — risco permanece se o ONS
+  documentar o contrário no futuro.
 - Datas de vigência do DST: confirmado nesta geração que são produzidas por
   `zoneinfo`/IANA dentro do próprio `src/gerar_facts.py`
   (função `gerar_timestamps_especiais_dst`), não hardcoded — ver seção D.
