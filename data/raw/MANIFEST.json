@@ -146,6 +146,24 @@
     "status": "ok",
     "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cvu_usitermica_se/CVU_USINA_TERMICA_2024.parquet"
   },
+  "documentacao/DicionarioDados_Cmo_Semi_Horario.pdf": {
+    "downloaded_at_local": "2026-07-17T14:07:00.563310-03:00",
+    "downloaded_at_utc": "2026-07-17T17:07:00.563310+00:00",
+    "fonte": "ONS Dados Abertos - dicionario de dados",
+    "sha256": "1794ee35942e2f528ce1ea581ac037652a5771b5d7d1193600876af861352604",
+    "size_bytes": 169640,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_tm/DicionarioDados_Cmo_Semi_Horario.pdf"
+  },
+  "documentacao/DicionarioDados_CurvaCarga.pdf": {
+    "downloaded_at_local": "2026-07-17T14:07:02.499580-03:00",
+    "downloaded_at_utc": "2026-07-17T17:07:02.499580+00:00",
+    "fonte": "ONS Dados Abertos - dicionario de dados",
+    "sha256": "ba0fb840656b8cd04ab630a30f9f2aa56ebc3733b2767e8a50aee4d82fd0aac5",
+    "size_bytes": 283974,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/curva-carga-ho/DicionarioDados_CurvaCarga.pdf"
+  },
   "temperatura/era5_temperature_2m_Belo_Horizonte_2024_2025.json": {
     "downloaded_at_local": "2026-07-17T08:45:32.914734-03:00",
     "downloaded_at_utc": "2026-07-17T11:45:32.914734+00:00",

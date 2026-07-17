@@ -16,8 +16,8 @@ produz o mesmo arquivo.
   extraído do parquet ou do manifesto, listada aqui como contexto fixo)
 - Arquivos: 12, anos cobertos: 2015–2026 (12 arquivos, 1 por ano)
 - Snapshot baixado entre `2026-07-16T20:06:20.964290-03:00` e `2026-07-16T20:06:42.927332-03:00`
-- SHA-256 do `MANIFEST.json` neste momento: `222d23891efa531ab44dd9e155378a54117291e7f27235d530ffce7a346481aa`
-- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 44
+- SHA-256 do `MANIFEST.json` neste momento: `b8768ccee4f52c5c751db3ec80a86952da2cd97b2d5845174cd7cd1c87512bc4`
+- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 46
 
 **Aviso — republicação em lote (recalculado, não copiado):** agrupando os 12
 arquivos por data (não hora) do cabeçalho HTTP `Last-Modified`:
@@ -365,6 +365,78 @@ realizado — é uma estimativa sob suposição explícita.**
 detalhe (esta seção). A interseção 2020–2026 entre carga e CMO Semi-Horário
 vem da listagem de recursos do portal do ONS, **não** de download e checagem
 ano a ano de 2020, 2021, 2022, 2023, 2025 e 2026.
+
+---
+
+## K. Agregação do CMO — sensibilidade e fuso (recalculado do zero)
+
+### K1. Sensibilidade da métrica de custo à agregação do CMO (30min→60min)
+
+Instrumento de medição: sazonal-naive (previsão(H,D) = observado(H,D−7)),
+SE/CO, 2024, mesma metodologia da seção J (9 timestamps de `is_dst_transition`
+— nenhum cai em 2024 —, 4 dias sem CMO excluídos da métrica de custo).
+
+| Variante | Custo total (R$) | % do custo de (a) média |
+|---|---|---|
+| (a) Média das 2 semi-horas | 2.046.650.092,91 | 100,0000% |
+| (b) Máximo das 2 semi-horas | 2.102.879.656,47 | 102,7474% |
+| (c) Primeira semi-hora | 2.034.348.416,26 | 99,3989% |
+
+Correlação entre séries horárias de custo: (a)×(b) = 0,993299,
+(a)×(c) = 0,990839, (b)×(c) = 0,975031.
+
+Horas em que (b) muda o custo em mais de 10% vs. (a): **586**
+de 8.688. Horas em que (c) muda em mais de 10%: **586**.
+Mesmo conjunto de horas nas duas comparações: sim.
+
+**Regra decidida:** usar a média das duas semi-horas.
+
+### K2. Efeito de CMO zero/negativo e concentração do custo
+
+Valores semi-horários negativos no ano inteiro, **subsistema SE apenas**:
+0. Não contradiz a seção J3 (77 negativos):
+aquele número é a soma dos 4 subsistemas — os 77 negativos pertencem inteiramente
+ao subsistema NE; SE não tem nenhum valor semi-horário negativo em 2024.
+Horas com a MÉDIA horária do CMO igual a zero: 1.084.
+Horas com a MÉDIA horária do CMO negativa: **0**.
+
+Limiar do decil 90 do CMO médio horário: 359,8710 R$/MWh.
+Horas nesse decil: 869.
+% do custo total do ano (variante média) vindo dessas horas: **47,2269%**.
+
+### K3. Fuso horário do CMO — fatos brutos e fato derivado
+
+Dicionários de dados verificados (CMO Semi-Horário e Curva de Carga) presentes
+em `data/raw/documentacao/`: sim.
+Nenhum dos dois menciona fuso horário, UTC ou hora local em nenhum lugar do
+texto (verificado por leitura integral do PDF — relatório 07, seções 1-2).
+
+Perfil intradiário do CMO (SE, 2024): pico às **18h** (171,0205 R$/MWh),
+vale às **10h** (81,8598 R$/MWh).
+
+Correlação entre o perfil horário do CMO e o perfil horário da carga SE/CO
+(2024, rótulos de hora como armazenados, sem deslocamento): **0,4501**.
+Correlação sob a hipótese "CMO está em UTC, corrigir +3h": **-0,0051**.
+
+**FATO DERIVADO (não documentado pela fonte — síntese de evidência empírica,
+não leitura de documentação):** o CMO Semi-Horário é tratado como hora local
+(America/Sao_Paulo), mesma convenção da carga. Base: os três fatos brutos acima
+convergem — sob a hipótese UTC, o perfil descreveria um sistema mais caro às
+15h (hora local) que às 19h, e a correção de +3h destrói a correlação existente
+(de 0,4501 para -0,0051) em vez de melhorá-la.
+
+**Divergência registrada, não resolvida por omissão:** `reports/07_fuso_cmo.md`,
+aplicando critério documental estrito (fuso só conta como determinado se
+declarado pela fonte OU se o teste específico de deslocamento produzir um pico
+nítido e isolado), concluiu **(c) o fuso permanece desconhecido** — o mesmo
+teste de correlação, isoladamente, não teve um pico em ±3h que se distinguisse
+com força do resto do ciclo de 24h testado (relatório 07, seção 1; relatório 06,
+Parte A3). Esta seção registra uma leitura diferente do mesmo conjunto de fatos
+— tratar os três fatos brutos como convergentes o suficiente para adotar hora
+local como convenção de trabalho — sem apagar a conclusão (c) do relatório 07.
+Confiança: alta por evidência (perfil físico + correlação), zero por
+documentação (nenhuma fonte declara o fuso). Risco explícito: se o ONS
+documentar o contrário, a métrica de custo precisa ser recalculada.
 
 ---
 

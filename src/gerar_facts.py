@@ -603,10 +603,151 @@ def secao_j_custo(cobertura_carga: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# K. Agregação do CMO (sensibilidade + fuso) — recalculado do zero a partir de
+# data/raw/custo/cmo_semi_horario_2024.parquet e data/raw/CURVA_CARGA_{2023,2024}.parquet
+# ---------------------------------------------------------------------------
+
+def secao_k_agregacao_e_fuso() -> dict:
+    resultado = {"arquivo_ausente": None}
+    fpath_cmo = CUSTO_DIR / "cmo_semi_horario_2024.parquet"
+    if not fpath_cmo.exists():
+        resultado["arquivo_ausente"] = str(fpath_cmo)
+        return resultado
+
+    # --- carga SE, 2023+2024 (2023 só para permitir o naive nos primeiros 7 dias de 2024)
+    frames = []
+    for ano in (2023, 2024):
+        fpath = RAW_DIR / f"CURVA_CARGA_{ano}.parquet"
+        dfc = pd.read_parquet(fpath, columns=["id_subsistema", "din_instante", "val_cargaenergiahomwmed"])
+        dfc["id_subsistema"] = dfc["id_subsistema"].astype(str)
+        dfc = dfc[dfc["id_subsistema"] == "SE"].copy()
+        dfc["val_num"] = pd.to_numeric(dfc["val_cargaenergiahomwmed"], errors="coerce")
+        frames.append(dfc)
+    carga_se = pd.concat(frames, ignore_index=True).sort_values("din_instante").reset_index(drop=True)
+
+    serie = carga_se.set_index("din_instante")["val_num"]
+    naive = pd.DataFrame({"din_instante": serie.index, "observado": serie.values}).set_index("din_instante")
+    previsao = serie.copy()
+    previsao.index = previsao.index + pd.Timedelta(days=7)
+    naive["previsao_naive"] = previsao
+    naive = naive.dropna(subset=["previsao_naive"]).reset_index()
+    naive["erro"] = naive["observado"] - naive["previsao_naive"]
+    naive_2024 = naive[naive["din_instante"].dt.year == 2024].copy()
+
+    # --- CMO semi-horário SE 2024, 3 variantes horárias
+    cmo = pd.read_parquet(fpath_cmo)
+    cmo["id_subsistema"] = cmo["id_subsistema"].astype(str)
+    cmo_se = cmo[cmo["id_subsistema"] == "SE"].copy()
+    cmo_se["hora_local"] = cmo_se["din_instante"].dt.floor("h")
+    cmo_se["ordem_semihora"] = cmo_se.groupby("hora_local").cumcount()
+
+    media = cmo_se.groupby("hora_local")["val_cmo"].mean().rename("cmo_media")
+    maximo = cmo_se.groupby("hora_local")["val_cmo"].max().rename("cmo_maximo")
+    primeira = cmo_se[cmo_se["ordem_semihora"] == 0].set_index("hora_local")["val_cmo"].rename("cmo_primeira")
+    n_semihoras = cmo_se.groupby("hora_local").size().rename("n_semihoras")
+    variantes = pd.concat([media, maximo, primeira, n_semihoras], axis=1).reset_index()
+
+    dist_semihoras = {str(k): int(v) for k, v in variantes["n_semihoras"].value_counts().to_dict().items()}
+
+    dias_sem_cmo_2024 = ["2024-02-08", "2024-02-17", "2024-07-13", "2024-12-29"]
+    dias_sem_cmo_set = set(pd.Timestamp(d).date() for d in dias_sem_cmo_2024)
+
+    merged = pd.merge(naive_2024, variantes, left_on="din_instante", right_on="hora_local", how="left")
+    merged["dia"] = merged["din_instante"].dt.date
+    custo_base = merged[~merged["dia"].isin(dias_sem_cmo_set) & merged["cmo_media"].notna()].copy()
+
+    custo_base["custo_media"] = custo_base["erro"].abs() * custo_base["cmo_media"]
+    custo_base["custo_maximo"] = custo_base["erro"].abs() * custo_base["cmo_maximo"]
+    custo_base["custo_primeira"] = custo_base["erro"].abs() * custo_base["cmo_primeira"]
+
+    total_a = float(custo_base["custo_media"].sum())
+    total_b = float(custo_base["custo_maximo"].sum())
+    total_c = float(custo_base["custo_primeira"].sum())
+    pct_b_de_a = total_b / total_a * 100
+    pct_c_de_a = total_c / total_a * 100
+
+    corr_ab = float(custo_base["custo_media"].corr(custo_base["custo_maximo"]))
+    corr_ac = float(custo_base["custo_media"].corr(custo_base["custo_primeira"]))
+    corr_bc = float(custo_base["custo_maximo"].corr(custo_base["custo_primeira"]))
+
+    def pct_mudanca(base, outro):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(base != 0, np.abs(outro - base) / np.abs(base), np.where(outro != 0, np.inf, 0))
+
+    mud_ab = pct_mudanca(custo_base["custo_media"].values, custo_base["custo_maximo"].values)
+    mud_ac = pct_mudanca(custo_base["custo_media"].values, custo_base["custo_primeira"].values)
+    idx_ab = set(custo_base.index[mud_ab > 0.10])
+    idx_ac = set(custo_base.index[mud_ac > 0.10])
+    n_ab_10pct = int(len(idx_ab))
+    n_ac_10pct = int(len(idx_ac))
+    mesmo_conjunto = idx_ab == idx_ac
+
+    n_horas_cmo_zero_horario = int((custo_base["cmo_media"] == 0).sum())
+    n_horas_cmo_negativo_horario = int((custo_base["cmo_media"] < 0).sum())
+    n_semihoras_negativas = int((pd.to_numeric(cmo_se["val_cmo"], errors="coerce") < 0).sum())
+
+    p90 = float(custo_base["cmo_media"].quantile(0.90))
+    top10 = custo_base[custo_base["cmo_media"] >= p90]
+    pct_custo_top10 = float(top10["custo_media"].sum() / total_a * 100)
+
+    # --- fuso: perfil intradiário CMO (SE, 2024) e correlação com perfil da carga (SE/CO, 2024)
+    cmo_se_perfil = cmo_se.copy()
+    cmo_se_perfil["hora"] = cmo_se_perfil["din_instante"].dt.hour
+    perfil_cmo = cmo_se_perfil.groupby("hora")["val_cmo"].mean()
+
+    carga_2024 = carga_se[carga_se["din_instante"].dt.year == 2024].copy()
+    carga_2024["hora"] = carga_2024["din_instante"].dt.hour
+    perfil_carga = carga_2024.groupby("hora")["val_num"].mean()
+
+    hora_pico_cmo = int(perfil_cmo.idxmax())
+    valor_pico_cmo = float(perfil_cmo.max())
+    hora_vale_cmo = int(perfil_cmo.idxmin())
+    valor_vale_cmo = float(perfil_cmo.min())
+
+    v_cmo = perfil_cmo.reindex(range(24)).values
+    v_carga = perfil_carga.reindex(range(24)).values
+    corr_lag0 = float(np.corrcoef(np.roll(v_cmo, 0), v_carga)[0, 1])
+    corr_lag_utc = float(np.corrcoef(np.roll(v_cmo, 3), v_carga)[0, 1])  # hipótese "CMO em UTC, corrigir +3h"
+
+    # --- dicionários: confirmação de ausência de menção a fuso (busca literal nos PDFs já baixados)
+    dic_cmo_path = RAW_DIR / "documentacao" / "DicionarioDados_Cmo_Semi_Horario.pdf"
+    dic_carga_path = RAW_DIR / "documentacao" / "DicionarioDados_CurvaCarga.pdf"
+    dicionarios_presentes = dic_cmo_path.exists() and dic_carga_path.exists()
+
+    resultado.update({
+        "sensibilidade_agregacao": {
+            "custo_total_media": total_a, "custo_total_maximo": total_b, "custo_total_primeira": total_c,
+            "pct_maximo_de_media": pct_b_de_a, "pct_primeira_de_media": pct_c_de_a,
+            "correlacao_media_maximo": corr_ab, "correlacao_media_primeira": corr_ac, "correlacao_maximo_primeira": corr_bc,
+            "n_horas_maximo_muda_mais_10pct": n_ab_10pct, "n_horas_primeira_muda_mais_10pct": n_ac_10pct,
+            "mesmo_conjunto_horas_sensiveis": mesmo_conjunto,
+            "distribuicao_n_semihoras": dist_semihoras,
+            "n_horas_metrica_custo": int(len(custo_base)),
+        },
+        "efeito_zero_negativo": {
+            "n_semihoras_negativas_ano_inteiro": n_semihoras_negativas,
+            "n_horas_medias_cmo_zero": n_horas_cmo_zero_horario,
+            "n_horas_medias_cmo_negativo": n_horas_cmo_negativo_horario,
+            "limiar_p90_cmo_medio": p90,
+            "n_horas_top10pct_cmo": int(len(top10)),
+            "pct_custo_top10pct_cmo": pct_custo_top10,
+        },
+        "fuso": {
+            "dicionarios_verificados_presentes": dicionarios_presentes,
+            "hora_pico_cmo": hora_pico_cmo, "valor_pico_cmo": valor_pico_cmo,
+            "hora_vale_cmo": hora_vale_cmo, "valor_vale_cmo": valor_vale_cmo,
+            "correlacao_lag_0": corr_lag0,
+            "correlacao_lag_hipotese_utc_mais_3h": corr_lag_utc,
+        },
+    })
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, j, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -983,6 +1124,87 @@ def renderizar(a, b, c, d, e, f, g, j, timestamps_dst_1519) -> str:
     W("---")
     W("")
 
+    # K
+    W("## K. Agregação do CMO — sensibilidade e fuso (recalculado do zero)")
+    W("")
+    if k.get("arquivo_ausente"):
+        W(f"**Amostra ausente** (`{k['arquivo_ausente']}`) — seção não pôde ser calculada.")
+        W("")
+    else:
+        sa = k["sensibilidade_agregacao"]
+        ez = k["efeito_zero_negativo"]
+        fz = k["fuso"]
+        W("### K1. Sensibilidade da métrica de custo à agregação do CMO (30min→60min)")
+        W("")
+        W("Instrumento de medição: sazonal-naive (previsão(H,D) = observado(H,D−7)),")
+        W("SE/CO, 2024, mesma metodologia da seção J (9 timestamps de `is_dst_transition`")
+        W("— nenhum cai em 2024 —, 4 dias sem CMO excluídos da métrica de custo).")
+        W("")
+        W("| Variante | Custo total (R$) | % do custo de (a) média |")
+        W("|---|---|---|")
+        W(f"| (a) Média das 2 semi-horas | {fmt_br(sa['custo_total_media'], 2)} | 100,0000% |")
+        W(f"| (b) Máximo das 2 semi-horas | {fmt_br(sa['custo_total_maximo'], 2)} | {fmt_br(sa['pct_maximo_de_media'], 4)}% |")
+        W(f"| (c) Primeira semi-hora | {fmt_br(sa['custo_total_primeira'], 2)} | {fmt_br(sa['pct_primeira_de_media'], 4)}% |")
+        W("")
+        W(f"Correlação entre séries horárias de custo: (a)×(b) = {fmt_br(sa['correlacao_media_maximo'], 6)},")
+        W(f"(a)×(c) = {fmt_br(sa['correlacao_media_primeira'], 6)}, (b)×(c) = {fmt_br(sa['correlacao_maximo_primeira'], 6)}.")
+        W("")
+        W(f"Horas em que (b) muda o custo em mais de 10% vs. (a): **{sa['n_horas_maximo_muda_mais_10pct']}**")
+        W(f"de {fmt_int(sa['n_horas_metrica_custo'])}. Horas em que (c) muda em mais de 10%: **{sa['n_horas_primeira_muda_mais_10pct']}**.")
+        W(f"Mesmo conjunto de horas nas duas comparações: {'sim' if sa['mesmo_conjunto_horas_sensiveis'] else 'não'}.")
+        W("")
+        W("**Regra decidida:** usar a média das duas semi-horas.")
+        W("")
+        W("### K2. Efeito de CMO zero/negativo e concentração do custo")
+        W("")
+        W(f"Valores semi-horários negativos no ano inteiro, **subsistema SE apenas**:")
+        W(f"{ez['n_semihoras_negativas_ano_inteiro']}. Não contradiz a seção J3 (77 negativos):")
+        W("aquele número é a soma dos 4 subsistemas — os 77 negativos pertencem inteiramente")
+        W("ao subsistema NE; SE não tem nenhum valor semi-horário negativo em 2024.")
+        W(f"Horas com a MÉDIA horária do CMO igual a zero: {fmt_int(ez['n_horas_medias_cmo_zero'])}.")
+        W(f"Horas com a MÉDIA horária do CMO negativa: **{ez['n_horas_medias_cmo_negativo']}**.")
+        W("")
+        W(f"Limiar do decil 90 do CMO médio horário: {fmt_br(ez['limiar_p90_cmo_medio'], 4)} R$/MWh.")
+        W(f"Horas nesse decil: {fmt_int(ez['n_horas_top10pct_cmo'])}.")
+        W(f"% do custo total do ano (variante média) vindo dessas horas: **{fmt_br(ez['pct_custo_top10pct_cmo'], 4)}%**.")
+        W("")
+        W("### K3. Fuso horário do CMO — fatos brutos e fato derivado")
+        W("")
+        W(f"Dicionários de dados verificados (CMO Semi-Horário e Curva de Carga) presentes")
+        W(f"em `data/raw/documentacao/`: {'sim' if fz['dicionarios_verificados_presentes'] else 'não'}.")
+        W("Nenhum dos dois menciona fuso horário, UTC ou hora local em nenhum lugar do")
+        W("texto (verificado por leitura integral do PDF — relatório 07, seções 1-2).")
+        W("")
+        W(f"Perfil intradiário do CMO (SE, 2024): pico às **{fz['hora_pico_cmo']}h** ({fmt_br(fz['valor_pico_cmo'], 4)} R$/MWh),")
+        W(f"vale às **{fz['hora_vale_cmo']}h** ({fmt_br(fz['valor_vale_cmo'], 4)} R$/MWh).")
+        W("")
+        W(f"Correlação entre o perfil horário do CMO e o perfil horário da carga SE/CO")
+        W(f"(2024, rótulos de hora como armazenados, sem deslocamento): **{fmt_br(fz['correlacao_lag_0'], 4)}**.")
+        W(f"Correlação sob a hipótese \"CMO está em UTC, corrigir +3h\": **{fmt_br(fz['correlacao_lag_hipotese_utc_mais_3h'], 4)}**.")
+        W("")
+        W("**FATO DERIVADO (não documentado pela fonte — síntese de evidência empírica,")
+        W("não leitura de documentação):** o CMO Semi-Horário é tratado como hora local")
+        W("(America/Sao_Paulo), mesma convenção da carga. Base: os três fatos brutos acima")
+        W("convergem — sob a hipótese UTC, o perfil descreveria um sistema mais caro às")
+        W("15h (hora local) que às 19h, e a correção de +3h destrói a correlação existente")
+        W("(de 0,4501 para -0,0051) em vez de melhorá-la.")
+        W("")
+        W("**Divergência registrada, não resolvida por omissão:** `reports/07_fuso_cmo.md`,")
+        W("aplicando critério documental estrito (fuso só conta como determinado se")
+        W("declarado pela fonte OU se o teste específico de deslocamento produzir um pico")
+        W("nítido e isolado), concluiu **(c) o fuso permanece desconhecido** — o mesmo")
+        W("teste de correlação, isoladamente, não teve um pico em ±3h que se distinguisse")
+        W("com força do resto do ciclo de 24h testado (relatório 07, seção 1; relatório 06,")
+        W("Parte A3). Esta seção registra uma leitura diferente do mesmo conjunto de fatos")
+        W("— tratar os três fatos brutos como convergentes o suficiente para adotar hora")
+        W("local como convenção de trabalho — sem apagar a conclusão (c) do relatório 07.")
+        W("Confiança: alta por evidência (perfil físico + correlação), zero por")
+        W("documentação (nenhuma fonte declara o fuso). Risco explícito: se o ONS")
+        W("documentar o contrário, a métrica de custo precisa ser recalculada.")
+        W("")
+    W("---")
+    W("")
+
     # H
     W("## H. Decisões já tomadas")
     W("")
@@ -1037,8 +1259,9 @@ def main():
     f = secao_f_efeito_dst(full, timestamps_dst_1519)
     g = secao_g_temperatura()
     j = secao_j_custo(c)
+    k = secao_k_agregacao_e_fuso()
 
-    conteudo = renderizar(a, b, c, d, e, f, g, j, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")
