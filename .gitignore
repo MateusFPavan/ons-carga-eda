@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+data/raw/*
+data/interim/
+*.output
+
+# data/raw/ é ignorado por ser reconstruível (~100MB) e não determinístico ao longo do
+# tempo (o ONS revisa dados retroativamente). MANIFEST.json (URL + SHA-256 + timestamp
+# de cada arquivo) é o que garante a reprodução do snapshot — por isso é versionado
+# apesar da regra acima. Usa "data/raw/*" (não "data/raw/") porque git não permite
+# reincluir um arquivo cujo diretório pai inteiro foi excluído.
+!data/raw/MANIFEST.json
