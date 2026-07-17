@@ -1,0 +1,367 @@
+# Escopo do Projeto 3 — Previsão de Carga SE/CO e Custo do Erro
+
+Nenhum número neste documento foi calculado aqui. Todo valor citado vem de
+[`reports/FACTS.md`](FACTS.md), a folha de fatos gerada por código a partir do dado
+bruto. Onde uma seção descreve trabalho ainda não feito (modelagem, validação), isso
+está marcado explicitamente como plano, não como fato medido.
+
+---
+
+## 1. Pergunta de negócio
+
+Prever a carga horária do subsistema SE/CO com horizonte day-ahead (24h à frente) e
+traduzir o erro dessa previsão em custo, usando o preço marginal de operação do
+próprio SIN como referência — em vez de um custo inventado ou de um proxy genérico.
+
+---
+
+## 2. Alvo e horizonte
+
+- **Alvo:** subsistema SE/CO (`id_subsistema = "SE"`), carga horária. Os demais 3
+  subsistemas (`N`, `NE`, `S`) ficam como checagem de robustez, não como alvo
+  principal.
+- **Horizonte:** day-ahead, 24 horas.
+- **Justificativa:** day-ahead é o horizonte em que o despacho é decidido — é o
+  horizonte em que um erro de previsão de carga se traduz em decisão de despacho
+  errada, e portanto em custo.
+
+---
+
+## 3. Dados e proveniência
+
+- Fonte: ONS — Curva de Carga Horária. URL base:
+  `https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/curva-carga-ho`.
+- Licença: CC-BY, declarada pelo portal de dados abertos do ONS.
+- 12 arquivos, um por ano, cobrindo 2015–2026.
+- Snapshot baixado entre `2026-07-16T20:06:20.964290-03:00` e
+  `2026-07-16T20:06:42.927332-03:00`, identificado por hash — SHA-256 do
+  `MANIFEST.json` neste momento: `b8768ccee4f52c5c751db3ec80a86952da2cd97b2d5845174cd7cd1c87512bc4`
+  (46 entradas no manifesto, incluindo os arquivos de custo e temperatura sondados
+  depois).
+- **Revisão retroativa:** os 10 arquivos de 2015–2024 compartilham a mesma data de
+  `Last-Modified` do servidor (09 Oct 2025), numa sequência de poucos minutos —
+  consistente com republicação em lote, não com 10 eventos independentes. O ONS
+  declara um "processo de consistência recorrente" que revisa dados retroativamente.
+  Por isso o snapshot é identificado por hash, não tratado como imutável — qualquer
+  reprodução futura deste projeto pode encontrar valores diferentes nos mesmos anos.
+
+---
+
+## 4. Eixo temporal
+
+**Decisão:** hora local (`America/Sao_Paulo`), sem conversão para UTC.
+
+**Por quê:** converter para UTC introduz timestamps ambíguos e inexistentes sem
+nenhum ganho demonstrado. Dos 9 timestamps especiais de virada de horário de verão
+(2015–2019), 5 são ambíguos — cada um descrito como "1 hora física real não
+registrada". Isso significa que manter o eixo em UTC não resolveria o problema:
+criaria 5 horas físicas ausentes na série, em vez de resolvê-las.
+
+**Consequência declarada:** o eixo temporal do projeto é regular no relógio (24
+registros por dia, quase sempre), não contínuo no tempo físico. Isso é uma
+característica do dado, registrada, não corrigida.
+
+---
+
+## 5. Janela
+
+**Decisão:** 2015–2026, todo o histórico disponível no portal do ONS no momento do
+snapshot — não cortada em 2020.
+
+**Por quê não cortar em 2020:** o único fator que impõe um limite de 2020 é a
+cobertura do CMO Semi-Horário (fonte de preço para a métrica de custo), que não
+cobre 2015–2019. Isso não é motivo para limitar o modelo principal de previsão de
+carga, que pode e deve usar todo o histórico disponível — a limitação de cobertura do
+CMO afeta só a camada de tradução para custo, aplicada apenas ao período de teste.
+
+---
+
+## 6. Três quebras estruturais
+
+1. **Fim do horário de verão (2019) — comportamental.** O Brasil observou DST até
+   2019. O efeito no perfil de carga do SE/CO foi medido (dezembro+janeiro, 4 verões
+   com DST vs. 4 sem DST, dias úteis e fins de semana separados):
+
+   | Regime | Tipo de dia | Base | Hora pico tarde | Hora pico noite | Razão noite/tarde |
+   |---|---|---|---|---|---|
+   | com_dst | dia útil | bruto | 15h | 21h | 0,9640 |
+   | sem_dst | dia útil | bruto | 15h | 19h | 1,0194 |
+   | com_dst | fim de semana | bruto | 17h | 20h | 1,1182 |
+   | sem_dst | fim de semana | bruto | 17h | 19h | 1,1050 |
+
+   Contagem de dias na amostra: com_dst = 176 dias úteis + 72 fins de semana;
+   sem_dst = 177 dias úteis + 71 fins de semana.
+
+   **Limite declarado (não isolamento):** esta comparação NÃO isola o efeito do DST.
+   Os grupos diferem em ~7 anos de tendência de crescimento de carga, mudança de
+   matriz elétrica (geração solar distribuída cresceu no período) e efeitos
+   pós-pandemia sobre padrões de trabalho — nenhum desses confundidores foi
+   controlado.
+
+2. **Pandemia (2020) — comportamental.** Mudança de padrão de consumo associada ao
+   início da pandemia, um dos confundidores explicitamente não controlados na
+   comparação do item 1 acima. Nenhuma métrica numérica isolada do efeito da pandemia
+   está registrada em `FACTS.md`.
+
+3. **Grade temporal do CMO Semi-Horário (2020+) — artificial, não física.** A
+   cobertura do CMO Semi-Horário no portal do ONS começa em 2020, não em 2015 — é um
+   limite de disponibilidade de dado, não um evento do sistema elétrico. É essa
+   quebra, não uma quebra de comportamento de carga, que define o início do período
+   de teste da métrica de custo (seção 12e).
+
+---
+
+## 7. Os 9 timestamps especiais e seu tratamento
+
+Gerados por código (varredura via `zoneinfo("America/Sao_Paulo")` e `datetime.fold`,
+2015-01-01 a 2019-12-31, nenhuma data hardcoded): 4 timestamps locais inexistentes
+(início de DST) + 5 ambíguos (fim de DST) = 9 no total.
+
+| Timestamp | Tipo |
+|---|---|
+| 2015-02-21 23:00:00 | ambíguo |
+| 2015-10-18 00:00:00 | inexistente |
+| 2016-02-20 23:00:00 | ambíguo |
+| 2016-10-16 00:00:00 | inexistente |
+| 2017-02-18 23:00:00 | ambíguo |
+| 2017-10-15 00:00:00 | inexistente |
+| 2018-02-17 23:00:00 | ambíguo |
+| 2018-11-04 00:00:00 | inexistente |
+| 2019-02-16 23:00:00 | ambíguo |
+
+Nos 4 inexistentes, o valor vem vazio nos 4 subsistemas em 3 dos 4 casos; no quarto
+(2018-11-04), 3 subsistemas vazios e o subsistema S com a string `0E-8` (única
+notação científica em toda a coluna nos anos 2015–2024).
+
+**Tratamento:** flag `is_dst_transition` nesses 9 timestamps, excluídos como origem
+de previsão (não usados como ponto de partida para gerar uma previsão). Os vazios de
+outubro NÃO são imputados — o dado ausente permanece ausente.
+
+---
+
+## 8. Divergências e omissões do dicionário oficial
+
+Quatro casos, verificados na sondagem:
+
+1. **Tipo declarado vs. observado.** `val_cargaenergiahomwmed` é declarado `FLOAT`
+   no dicionário, mas está armazenado como texto (`str`) nos arquivos de 2015 a 2024
+   — só vira `float64` em 2025 e 2026.
+2. **Nulo declarado vs. observado.** A mesma coluna é declarada com "Permite valor
+   nulo: Não", mas há 87 strings vazias no dataset inteiro.
+3. **Unidade inconsistente dentro do mesmo dicionário.** O dicionário do CMO Semanal
+   declara `val_cmomediasemanal` em R$/MW, enquanto as outras 3 colunas de valor do
+   mesmo dataset (`val_cmoleve`, `val_cmomedia`, `val_cmopesada`) são declaradas em
+   R$/MWh — mesma tabela, mesmo tipo de grandeza, unidades diferentes.
+4. **Ausência de declaração de fuso horário.** Nem o dicionário do CMO Semi-Horário
+   nem o da Curva de Carga Horária mencionam fuso, UTC ou hora local em nenhum lugar
+   do texto — os dois usam a mesma frase idêntica para descrever a coluna de tempo,
+   sem diferenciação. Nenhuma página de documentação geral do portal do ONS declara
+   essa convenção (ver seção 12d).
+
+---
+
+## 9. Modelos, em ordem de prova
+
+1. Sazonal-naive (baseline).
+2. SARIMA / Prophet.
+3. TimesFM 2.5 e Chronos-2, zero-shot.
+
+Esta é a ordem planejada de avaliação — cada modelo só avança se justificar o custo
+de complexidade adicional sobre o anterior. Nenhum resultado de modelo (além do
+sazonal-naive usado como instrumento de medição nas sondagens já feitas) existe
+ainda.
+
+---
+
+## 10. Estacionariedade e sazonalidade
+
+A testar, não assumir. Antes de ajustar qualquer modelo estatístico (SARIMA/Prophet),
+a série de carga do SE/CO será testada formalmente quanto a estacionariedade e
+sazonalidade — não presumida a partir da inspeção visual dos gráficos já produzidos
+na sondagem. Nenhum teste estatístico de estacionariedade foi rodado até este ponto
+do projeto.
+
+---
+
+## 11. Validação
+
+Walk-forward: a previsão será testada avançando no tempo, nunca com dado do futuro
+disponível para o modelo em nenhum ponto do treino. O conjunto de teste final é
+tocado uma única vez, ao final, para reportar o número de avaliação do projeto — não
+usado para ajustar hiperparâmetro nem para escolher entre modelos candidatos.
+
+---
+
+## 12. Métrica
+
+### 12a. É modelo declarado, não medição
+
+Nenhum dos três datasets de custo sondados (CMO Semi-Horário, CMO Semanal, CVU)
+contém uma ligação entre erro de carga (MW) e custo (R$) já calculada, nem o
+conceito de "erro de previsão". Os três contêm preço. A métrica de negócio do
+projeto é, portanto, um modelo declarado, não um dado observado:
+
+> custo = |erro_MW| × CMO_horário × 1h
+
+sob a suposição de que o erro de previsão é valorado ao custo marginal de operação
+do subsistema naquela hora. Isto não é custo de despacho realizado — é uma
+estimativa sob suposição explícita.
+
+### 12b. Agregação do CMO: decisão testada
+
+**Decisão:** agregar o CMO Semi-Horário (30 minutos) para a grade horária pela
+**média** das duas semi-horas.
+
+**Testada contra duas alternativas** (máximo das duas semi-horas; primeira
+semi-hora), usando o sazonal-naive como instrumento de medição de erro, SE/CO, 2024:
+
+| Variante | Custo total como % da média |
+|---|---|
+| (a) Média das 2 semi-horas | 100,0000% |
+| (b) Máximo das 2 semi-horas | 102,7474% |
+| (c) Primeira semi-hora | 99,3989% |
+
+No agregado do ano, as três variantes ficam entre 99,3989% e 102,7474% da média —
+próximas. Mas a escolha afeta **586 horas específicas** (de 8.688 na métrica de
+custo) em mais de 10% cada — o mesmo conjunto de 586 horas nas duas comparações
+(máximo vs. média, e primeira vs. média).
+
+A média também evita CMO horário negativo: existem 77 valores semi-horários
+negativos no ano (todos no subsistema NE — nenhum no SE), mas **0 horas** com a
+média horária do CMO do SE saindo negativa.
+
+### 12c. O custo é concentrado — MAPE médio não garante custo baixo
+
+O limiar do decil 90 do CMO médio horário (SE, 2024) é 359,8710 R$/MWh. As 869 horas
+acima desse limiar concentram **47,2269%** do custo total do ano (variante média).
+Menos de 10% das horas respondem por quase metade do custo anual.
+
+**Consequência para a validação:** um modelo pode ter um MAPE médio baixo no ano
+inteiro e ainda assim ter custo alto, se seus piores erros caírem justamente nas
+horas de CMO mais alto. A avaliação de cada modelo (seção 11) vai reportar o erro
+estratificado por faixa de CMO, não só o erro médio agregado — isso ainda não foi
+feito para nenhum modelo além do sazonal-naive usado como instrumento nas sondagens.
+
+### 12d. Fuso do CMO: fato derivado
+
+Nenhum dos dois dicionários (CMO Semi-Horário, Curva de Carga) declara fuso
+horário. Nenhuma documentação geral do portal do ONS declara essa convenção.
+
+Três fatos brutos, medidos:
+
+- Perfil intradiário do CMO (SE, 2024): pico às 18h (171,0205 R$/MWh), vale às 10h
+  (81,8598 R$/MWh).
+- Correlação entre o perfil horário do CMO e o perfil horário da carga SE/CO, sem
+  deslocamento: 0,4501.
+- Correlação sob a hipótese "CMO está em UTC, corrigir +3h": -0,0051 — a correção
+  destrói a correlação em vez de melhorá-la.
+
+**Fato derivado:** o CMO Semi-Horário é tratado como hora local (`America/Sao_Paulo`),
+mesma convenção da carga — com base na convergência desses três fatos, não em
+declaração de fonte.
+
+**Divergência registrada, não resolvida por omissão:** `reports/07_fuso_cmo.md`,
+aplicando um critério documental estrito (fuso só conta como determinado se
+declarado pela fonte ou se o teste de deslocamento produzir um pico nítido e
+isolado em ±3h), concluiu que **o fuso permanece desconhecido**. Este documento
+regista uma leitura diferente do mesmo conjunto de fatos — tratar os três fatos
+brutos acima como convergentes o suficiente para uma convenção de trabalho — sem
+apagar essa conclusão. Confiança: alta por evidência, zero por documentação. Risco
+explícito: se o ONS documentar o contrário, a métrica de custo precisa ser
+recalculada.
+
+### 12e. Cobertura: custo só no período de teste
+
+O CMO Semi-Horário cobre 2020–2026 segundo a listagem do portal — só o ano de 2024
+foi efetivamente baixado e verificado em detalhe; 2020, 2021, 2022, 2023, 2025 e
+2026 constam apenas na listagem, não confirmados ano a ano. A métrica de custo é
+aplicada apenas ao período de teste (2020 em diante), nunca ao treino do modelo
+principal, que usa todo o histórico 2015–2026 de carga.
+
+---
+
+## 13. Incerteza
+
+A previsão será reportada com intervalo, não só ponto — a definir o método
+(quantis, conformal prediction, ou intervalo paramétrico do próprio modelo,
+dependendo de qual dos modelos da seção 9 for usado). Nenhuma decisão de método de
+intervalo foi tomada até este ponto; registrado aqui como requisito, não como fato
+já implementado.
+
+---
+
+## 14. Camada secundária: temperatura
+
+**Decisão:** 5 features separadas — São Paulo, Rio de Janeiro, Belo Horizonte,
+Brasília, Goiânia — sem ponderação entre elas. Camada secundária a partir de
+2024-01-20 (primeiro dia com cobertura de 24h completas), fora do modelo principal.
+
+**Sem vazamento por construção:** fonte é a Open-Meteo Previous Runs API
+(`temperature_2m_previous_day1`), que devolve o valor previsto 24h antes do
+instante válido — mesmo horizonte da previsão de carga.
+
+**Qualidade da própria previsão de temperatura** (previsão-24h vs. reanálise ERA5,
+5 cidades, jan/2024–dez/2025, 85.515 horas comparáveis): MAE agregado de 1,1102°C.
+
+**Erro pior nas horas de pico de carga:** MAE por hora mínimo às 09h (0,8616°C),
+máximo às 19h (1,4240°C) — a previsão de temperatura erra mais justamente na hora em
+que a carga do SE/CO costuma atingir seu pico.
+
+**ERA5 não é verdade absoluta:** é uma reanálise, não uma medição direta. Parte do
+erro atribuído à previsão-24h pode ser, na verdade, divergência entre ERA5 e a
+realidade física medida em estação — os números de previsão-vs-ERA5 e
+ERA5-vs-estação não são somáveis nem diretamente comparáveis.
+
+---
+
+## 15. Reprodutibilidade
+
+- Todo dado bruto identificado por SHA-256 em `data/raw/MANIFEST.json`, com URL e
+  timestamp de download — não pelo conteúdo assumido como fixo (seção 3).
+- Todo número deste documento e de `FACTS.md` é recalculado por
+  [`src/gerar_facts.py`](../src/gerar_facts.py) a partir do dado bruto — reexecutar
+  o script produz o mesmo arquivo, byte a byte (testado).
+- Verificação independente em [`src/verificar_facts.py`](../src/verificar_facts.py),
+  que relê `FACTS.md` e recalcula cada número separadamente, sem reusar as funções
+  do gerador.
+
+---
+
+## 16. Limitações declaradas
+
+- A comparação do efeito do DST (seção 6, item 1) não isola o efeito do DST —
+  tendência de crescimento, mudança de matriz elétrica e pós-pandemia não são
+  controlados.
+- ERA5 não é medição direta — é reanálise (seção 14).
+- A métrica de custo é um modelo declarado sob suposição explícita, não custo de
+  despacho realizado (seção 12a).
+- O fuso horário do CMO é um fato derivado por evidência empírica, não uma
+  declaração de fonte — o próprio relatório que gerou essa evidência concluiu que o
+  fuso permanece desconhecido sob critério documental estrito (seção 12d).
+- A cobertura do CMO Semi-Horário fora de 2024 (2020–2023, 2025–2026) não foi
+  confirmada ano a ano — só está na listagem do portal (seção 12e).
+- O mínimo histórico do subsistema NE (2018-03-21 16:00:00) não coincide com
+  nenhuma das 9 datas de transição de DST e permanece sem explicação.
+- A escolha do método de agregação do CMO (média) foi testada, mas ainda afeta 586
+  horas específicas em mais de 10% cada — a métrica de custo em nível de hora
+  individual é sensível a essa escolha, mesmo que o total anual não seja (seção
+  12b).
+
+---
+
+## 17. O que a sondagem corrigiu — 5 hipóteses refutadas
+
+1. **"`val_cargaenergiahomwmed` é `FLOAT`, como declara o dicionário."** Refutada:
+   está armazenada como texto em 2015–2024.
+2. **"A coluna de carga não tem valor nulo, como declara o dicionário."** Refutada:
+   87 strings vazias existem no dataset inteiro.
+3. **"`nom_subsistema` é uma chave estável para usar em joins."** Refutada: mudou de
+   `SUDESTE` para `SUDESTE/CENTRO-OESTE` em 2026 — por isso a regra decidida usa
+   `id_subsistema`, não `nom_subsistema`.
+4. **"Dias de virada de horário de verão têm 23 ou 25 registros."** Refutada: em
+   todo o dataset (2015–2026, 4 subsistemas), existe exatamente 1 dia irregular, e
+   ele tem 0 registros — não 23 nem 25.
+5. **"O CMO médio horário pode ficar negativo, já que o dicionário permite valor
+   negativo."** Refutada no nível agregado por hora: 0 horas com a média horária do
+   CMO do SE negativa, apesar de existirem 77 valores semi-horários negativos no
+   dataset (todos no subsistema NE).
