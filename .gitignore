@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 data/raw/*
 data/interim/
+data/processed/
 *.output
 
 # data/raw/ é ignorado por ser reconstruível (~100MB) e não determinístico ao longo do
