@@ -4,6 +4,7 @@ Execução de decisões já tomadas (reports/FACTS.md, seção H). Não é sonda
 imputa, não remove outlier, não cria feature. Se um sanity check falhar, o script
 ABORTA (raise) — não conserta nada.
 """
+import math
 import sys
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -14,6 +15,8 @@ import pandas as pd
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
+REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
+FACTS_PATH = REPORTS_DIR / "FACTS.md"
 OUT_PATH = PROCESSED_DIR / "carga_se.parquet"
 ANOS = list(range(2015, 2027))
 TZ = ZoneInfo("America/Sao_Paulo")
@@ -25,8 +28,13 @@ FACTS_SE_PRIMEIRO_INSTANTE = "2015-01-01 00:00:00"
 FACTS_SE_ULTIMO_INSTANTE = "2026-07-15 23:00:00"
 FACTS_SE_DUPLICADOS = 0
 FACTS_SE_DIAS_IRREGULARES = 0
-FACTS_SE_VALOR_MINIMO = 21299.347
-FACTS_SE_TIMESTAMP_MINIMO = "2015-06-28 07:00:00"
+
+# Tolerância para comparar agregados (min/max/média/mediana) calculados aqui contra
+# os mesmos agregados lidos de reports/FACTS.md seção C. Os dois lados vêm de
+# pipelines de arredondamento diferentes (float cru vs. round para exibição em
+# pt-BR com 3 casas), então igualdade estrita não é o critério certo.
+RTOL_AGREGADOS = 1e-6
+ABS_TOL_AGREGADOS = 1e-6  # piso absoluto, evita falso positivo perto de zero
 
 
 class SanityCheckError(RuntimeError):
@@ -74,6 +82,42 @@ def verificar_roundtrip_string(val_raw_str: pd.Series) -> None:
             perdas.append((s, f"Decimal original={d_original} != Decimal via float={d_via_float}"))
     if perdas:
         raise SanityCheckError(f"Perda de precisão real no round-trip float, {len(perdas)} valor(es): {perdas[:5]}")
+
+
+def parse_valor_br(s: str) -> float:
+    """Converte um número no formato pt-BR usado pelo FACTS.md ('62.149,885':
+    '.' separador de milhar, ',' decimal) para float."""
+    return float(s.strip().replace(".", "").replace(",", "."))
+
+
+def ler_estatisticas_se_do_facts() -> dict:
+    """Lê reports/FACTS.md, seção C ('Estatística de valor'), linha do subsistema SE,
+    e devolve mínimo/máximo/média/mediana (float) e os timestamps de mínimo/máximo
+    (str). Parsing de texto direto do arquivo — este script não reexecuta
+    src/gerar_facts.py, então se a seção mudar de formato isto precisa abortar,
+    não adivinhar."""
+    if not FACTS_PATH.exists():
+        raise SanityCheckError(f"FACTS.md ausente: {FACTS_PATH}")
+    texto = FACTS_PATH.read_text(encoding="utf-8")
+    idx = texto.find("Estatística de valor")
+    if idx == -1:
+        raise SanityCheckError("Seção 'Estatística de valor' não encontrada em FACTS.md — não é possível conferir agregados do SE.")
+    trecho = texto[idx:idx + 4000]
+    linha = next((l for l in trecho.splitlines() if l.startswith("| SE |")), None)
+    if linha is None:
+        raise SanityCheckError("Linha 'SE' da tabela de estatísticas não encontrada em FACTS.md.")
+    campos = [c.strip() for c in linha.strip("|").split("|")]
+    if len(campos) != 11:
+        raise SanityCheckError(f"Linha SE da tabela de estatísticas tem {len(campos)} campos, esperado 11: {campos}")
+    # campos: subsistema, n_validos, minimo, ts_min, maximo, ts_max, media, mediana, desvio, q25, q75
+    return {
+        "minimo": parse_valor_br(campos[2]),
+        "timestamp_minimo": campos[3],
+        "maximo": parse_valor_br(campos[4]),
+        "timestamp_maximo": campos[5],
+        "media": parse_valor_br(campos[6]),
+        "mediana": parse_valor_br(campos[7]),
+    }
 
 
 def carregar_se() -> tuple[pd.DataFrame, dict]:
@@ -168,20 +212,33 @@ def main():
             f"{sorted(faltando_nan_esperado)[:10]}"
         )
 
-    # --- SANITY CHECK 4: valor mínimo bate com FACTS.md seção E
+    # --- SANITY CHECK 4: mínimo, máximo, média e mediana batem com FACTS.md seção C,
+    # lidos do arquivo em tempo de execução (não hardcoded) — pega regressão silenciosa
+    # se a limpeza mudar. Tolerância explícita porque os dois lados vêm de pipelines de
+    # arredondamento diferentes (float cru vs. exibição pt-BR com 3 casas).
     valido = full.dropna(subset=["val_cargaenergiahomwmed"])
     idx_min = valido["val_cargaenergiahomwmed"].idxmin()
+    idx_max = valido["val_cargaenergiahomwmed"].idxmax()
     valor_min = float(valido.loc[idx_min, "val_cargaenergiahomwmed"])
     ts_min = str(valido.loc[idx_min, "din_instante"])
-    if abs(valor_min - FACTS_SE_VALOR_MINIMO) > 0.001 or ts_min != FACTS_SE_TIMESTAMP_MINIMO:
-        raise SanityCheckError(
-            f"Mínimo observado {valor_min} @ {ts_min} diverge de FACTS.md seção E "
-            f"{FACTS_SE_VALOR_MINIMO} @ {FACTS_SE_TIMESTAMP_MINIMO}."
-        )
-    valor_max = float(valido["val_cargaenergiahomwmed"].max())
+    valor_max = float(valido.loc[idx_max, "val_cargaenergiahomwmed"])
+    ts_max = str(valido.loc[idx_max, "din_instante"])
     valor_media = float(valido["val_cargaenergiahomwmed"].mean())
-    # FACTS.md não documenta máximo nem média do SE — reportados aqui sem gate de
-    # comparação (nenhuma referência existe para checar contra).
+    valor_mediana = float(valido["val_cargaenergiahomwmed"].median())
+
+    facts_estat = ler_estatisticas_se_do_facts()
+    divergencias = []
+    if ts_min != facts_estat["timestamp_minimo"]:
+        divergencias.append(f"timestamp mínimo: calculado={ts_min} facts={facts_estat['timestamp_minimo']}")
+    if ts_max != facts_estat["timestamp_maximo"]:
+        divergencias.append(f"timestamp máximo: calculado={ts_max} facts={facts_estat['timestamp_maximo']}")
+    agregados_calculados = {"minimo": valor_min, "maximo": valor_max, "media": valor_media, "mediana": valor_mediana}
+    for nome, valor_calculado in agregados_calculados.items():
+        valor_facts = facts_estat[nome]
+        if not math.isclose(valor_calculado, valor_facts, rel_tol=RTOL_AGREGADOS, abs_tol=ABS_TOL_AGREGADOS):
+            divergencias.append(f"{nome}: calculado={valor_calculado} facts={valor_facts}")
+    if divergencias:
+        raise SanityCheckError(f"Agregados do SE divergem de FACTS.md seção C: {'; '.join(divergencias)}")
 
     # --- SANITY CHECK 5: todos os dias têm 24 registros, exceto os já documentados (nenhum, para SE)
     dia = full["din_instante"].dt.date
@@ -208,9 +265,10 @@ def main():
     print(f"NaN em val_cargaenergiahomwmed: {int(nan_mask.sum())}")
     print(f"is_dst_transition == True: {n_flags}")
     print(f"Valor mínimo: {valor_min} @ {ts_min}")
-    print(f"Valor máximo (sem referência no FACTS.md para checagem): {valor_max}")
-    print(f"Valor médio (sem referência no FACTS.md para checagem): {valor_media:.4f}")
-    print("Todos os sanity checks passaram.")
+    print(f"Valor máximo: {valor_max} @ {ts_max}")
+    print(f"Valor médio: {valor_media:.4f}")
+    print(f"Valor mediano: {valor_mediana:.4f}")
+    print("Todos os sanity checks passaram (agregados conferidos contra FACTS.md seção C, automaticamente).")
 
 
 if __name__ == "__main__":
