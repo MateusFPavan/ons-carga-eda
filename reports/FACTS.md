@@ -96,6 +96,16 @@ Dias irregulares (linhas != 24 registros), listados:
 
 - N, 2015-04-09: 0 registros
 
+Estatística de valor (`val_cargaenergiahomwmed`), por subsistema, sobre os
+valores válidos (NaN excluídos):
+
+| Subsistema | N válidos | Mínimo | Timestamp mínimo | Máximo | Timestamp máximo | Média | Mediana | Desvio padrão | Q25 | Q75 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| N | 101.108 | 841,988 | 2018-03-21 16:00:00 | 10.239,232 | 2025-11-17 15:00:00 | 6.259,163 | 5.851,278 | 1.239,663 | 5.347,105 | 7.175,555 |
+| NE | 101.108 | 665,031 | 2018-03-21 16:00:00 | 18.156,972 | 2024-02-08 10:00:00 | 11.216,749 | 11.075,452 | 1.685,919 | 10.026,005 | 12.291,604 |
+| S | 101.109 | 0,000 | 2018-11-04 00:00:00 | 22.737,443 | 2025-02-11 14:00:00 | 11.896,368 | 11.911,243 | 2.605,396 | 9.905,439 | 13.594,165 |
+| SE | 101.108 | 21.299,347 | 2015-06-28 07:00:00 | 62.149,885 | 2025-02-18 14:00:00 | 39.075,430 | 39.046,664 | 6.633,629 | 34.216,183 | 43.613,862 |
+
 ---
 
 ## D. Horário de verão — os 9 timestamps especiais
@@ -162,8 +172,20 @@ Total de ocorrências de notação científica na coluna inteira (2015-2024): 1.
 não coincide com nenhuma das 9 datas de transição de DST listadas na seção D.
 Nenhuma causa foi investigada além dessa checagem de coincidência de data.
 
-**2015-04-09, subsistema N:** 0 registros nesse dia
-(dia inteiro ausente). Mesma data, outros subsistemas: NE=24, S=24, SE=24.
+**2015-04-09 — nenhum dos 4 subsistemas tem dado válido nesse dia,**
+por duas formas distintas de ausência na mesma fonte:
+
+| Subsistema | Linhas | Valores vazios | Forma de ausência |
+|---|---|---|---|
+| N | 0 | 0 | linha ausente |
+| NE | 24 | 24 | linha presente, valor vazio |
+| S | 24 | 24 | linha presente, valor vazio |
+| SE | 24 | 24 | linha presente, valor vazio |
+
+**Nota:** são duas formas distintas de ausência na mesma fonte. A forma
+"linha presente, valor vazio" (NE, S, SE — 24 linhas, 24 valores vazios cada)
+é a mesma observada nos 4 vazios de início de DST em outubro (seção D). A forma
+"linha ausente" (N — 0 linhas) só ocorre nesta data.
 
 ---
 

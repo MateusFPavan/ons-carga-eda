@@ -81,6 +81,40 @@ def main():
             checar(f"{sub_id} n_linhas", f"{n_total:,}".replace(",", "."), campos[3])
             checar(f"{sub_id} duplicados", n_dup, int(campos[5]))
 
+    print("\n=== C. estatísticas de valor por subsistema (recomputado, independente) ===")
+    idx_stats = texto.find("Estatística de valor")
+    trecho_stats = texto[idx_stats:idx_stats + 4000] if idx_stats != -1 else ""
+
+    def parse_br(s):
+        return float(s.replace(".", "").replace(",", "."))
+
+    for sub_id, g in full.groupby("id_subsistema"):
+        valido = g.dropna(subset=["val_num"])
+        idx_min = valido["val_num"].idxmin()
+        idx_max = valido["val_num"].idxmax()
+        minimo = float(valido["val_num"].min())
+        maximo = float(valido["val_num"].max())
+        media = float(valido["val_num"].mean())
+        mediana = float(valido["val_num"].median())
+        desvio = float(valido["val_num"].std())
+        ts_min = str(valido.loc[idx_min, "din_instante"])
+        ts_max = str(valido.loc[idx_max, "din_instante"])
+
+        linha = next((l for l in trecho_stats.splitlines() if l.startswith(f"| {sub_id} |")), None)
+        if linha is None:
+            print(f"[FALTA] linha de estatística de valor para {sub_id} não encontrada no FACTS.md")
+            erros.append((f"{sub_id} estatistica valor", "presente", "ausente"))
+            continue
+        campos = [c.strip() for c in linha.strip("|").split("|")]
+        # campos: subsistema, n_validos, minimo, ts_min, maximo, ts_max, media, mediana, desvio, q25, q75
+        checar(f"{sub_id} timestamp minimo (C)", ts_min, campos[3])
+        checar(f"{sub_id} timestamp maximo (C)", ts_max, campos[5])
+        checar(f"{sub_id} minimo (C)", round(minimo, 3), round(parse_br(campos[2]), 3))
+        checar(f"{sub_id} maximo (C)", round(maximo, 3), round(parse_br(campos[4]), 3))
+        checar(f"{sub_id} media (C)", round(media, 3), round(parse_br(campos[6]), 3))
+        checar(f"{sub_id} mediana (C)", round(mediana, 3), round(parse_br(campos[7]), 3))
+        checar(f"{sub_id} desvio (C)", round(desvio, 3), round(parse_br(campos[8]), 3))
+
     print("\n=== D. timestamps DST (recomputados via zoneinfo, independente) ===")
     tz = ZoneInfo("America/Sao_Paulo")
 
@@ -111,6 +145,23 @@ def main():
                 if len(campos) == 4 and ":" in campos[2]:
                     checar(f"{sub_id} timestamp minimo", str(row["din_instante"]), campos[2])
                     break
+
+    print("\n=== E. 2015-04-09, todos os subsistemas (recomputado, independente) ===")
+    dia_alvo = pd.Timestamp("2015-04-09").date()
+    idx_e = texto.find("nenhum dos 4 subsistemas")
+    trecho_e = texto[idx_e:idx_e + 800] if idx_e != -1 else ""
+    for sub in ["N", "NE", "S", "SE"]:
+        g_dia = full[(full["din_instante"].dt.date == dia_alvo) & (full["id_subsistema"] == sub)]
+        n_linhas_real = len(g_dia)
+        n_vazias_real = int((g_dia["val_raw_str"].str.strip() == "").sum())
+        linha = next((l for l in trecho_e.splitlines() if l.startswith(f"| {sub} |")), None)
+        if linha is None:
+            print(f"[FALTA] linha 2015-04-09 para {sub} não encontrada no FACTS.md")
+            erros.append((f"2015-04-09 {sub}", "presente", "ausente"))
+            continue
+        campos = [c.strip() for c in linha.strip("|").split("|")]
+        checar(f"2015-04-09 {sub} linhas", n_linhas_real, int(campos[1]))
+        checar(f"2015-04-09 {sub} vazias", n_vazias_real, int(campos[2]))
 
     print("\n=== G. temperatura (recomputo independente a partir dos JSON já baixados) ===")
     for cidade in ["Sao_Paulo", "Rio_de_Janeiro", "Belo_Horizonte", "Brasilia", "Goiania"]:

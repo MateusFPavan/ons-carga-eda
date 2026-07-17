@@ -178,6 +178,22 @@ def secao_c_cobertura_temporal(full: pd.DataFrame) -> dict:
         contagem_por_dia = contagem_por_dia.reindex(calendario_completo, fill_value=0)
         dias_irregulares = contagem_por_dia[contagem_por_dia != 24]
 
+        valido = g.dropna(subset=["val_num"])
+        idx_min = valido["val_num"].idxmin()
+        idx_max = valido["val_num"].idxmax()
+        estatisticas_valor = {
+            "n_validos": int(len(valido)),
+            "minimo": float(valido["val_num"].min()),
+            "din_instante_minimo": str(valido.loc[idx_min, "din_instante"]),
+            "maximo": float(valido["val_num"].max()),
+            "din_instante_maximo": str(valido.loc[idx_max, "din_instante"]),
+            "media": float(valido["val_num"].mean()),
+            "mediana": float(valido["val_num"].median()),
+            "desvio_padrao": float(valido["val_num"].std()),
+            "q25": float(valido["val_num"].quantile(0.25)),
+            "q75": float(valido["val_num"].quantile(0.75)),
+        }
+
         resultado[sub_id] = {
             "primeiro_instante": str(primeiro),
             "ultimo_instante": str(ultimo),
@@ -185,6 +201,7 @@ def secao_c_cobertura_temporal(full: pd.DataFrame) -> dict:
             "n_timestamps_distintos": int(n_distintos),
             "n_duplicados": int(n_duplicados),
             "dias_irregulares": [{"dia": str(d), "n_registros": int(c)} for d, c in dias_irregulares.items()],
+            "estatisticas_valor": estatisticas_valor,
         }
     return resultado
 
@@ -284,18 +301,20 @@ def secao_e_anomalias(full: pd.DataFrame, datas_transicao_dst: set) -> dict:
             "coincide_com_transicao_dst": str(data_min) in datas_transicao_dst,
         }
 
-    # 2015-04-09, subsistema N
+    # 2015-04-09, todos os subsistemas — duas formas distintas de ausência
+    # (linha ausente vs. linha presente com valor vazio), checadas separadamente
     dia_alvo = pd.Timestamp("2015-04-09").date()
-    n_no_dia = len(full[(full["din_instante"].dt.date == dia_alvo) & (full["id_subsistema"] == "N")])
-    outros_no_dia = {
-        sub: len(full[(full["din_instante"].dt.date == dia_alvo) & (full["id_subsistema"] == sub)])
-        for sub in ["NE", "S", "SE"]
-    }
+    dia_2015_04_09 = {}
+    for sub in ["N", "NE", "S", "SE"]:
+        g_dia = full[(full["din_instante"].dt.date == dia_alvo) & (full["id_subsistema"] == sub)]
+        dia_2015_04_09[sub] = {
+            "n_linhas": int(len(g_dia)),
+            "n_vazias": int((g_dia["val_raw_str"].str.strip() == "").sum()),
+        }
 
     return {
         "minimos_por_subsistema": resultado,
-        "dia_2015_04_09_registros_N": n_no_dia,
-        "dia_2015_04_09_registros_outros": outros_no_dia,
+        "dia_2015_04_09": dia_2015_04_09,
     }
 
 
@@ -842,6 +861,19 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     if not algum_irregular:
         W("- nenhum")
     W("")
+    W("Estatística de valor (`val_cargaenergiahomwmed`), por subsistema, sobre os")
+    W("valores válidos (NaN excluídos):")
+    W("")
+    W("| Subsistema | N válidos | Mínimo | Timestamp mínimo | Máximo | Timestamp máximo | Média | Mediana | Desvio padrão | Q25 | Q75 |")
+    W("|---|---|---|---|---|---|---|---|---|---|---|")
+    for sub in sorted(c):
+        ev = c[sub]["estatisticas_valor"]
+        W(
+            f"| {sub} | {fmt_int(ev['n_validos'])} | {fmt_br(ev['minimo'], 3)} | {ev['din_instante_minimo']} | "
+            f"{fmt_br(ev['maximo'], 3)} | {ev['din_instante_maximo']} | {fmt_br(ev['media'], 3)} | "
+            f"{fmt_br(ev['mediana'], 3)} | {fmt_br(ev['desvio_padrao'], 3)} | {fmt_br(ev['q25'], 3)} | {fmt_br(ev['q75'], 3)} |"
+        )
+    W("")
     W("---")
     W("")
 
@@ -905,10 +937,20 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     W("não coincide com nenhuma das 9 datas de transição de DST listadas na seção D.")
     W("Nenhuma causa foi investigada além dessa checagem de coincidência de data.")
     W("")
-    outros = e["dia_2015_04_09_registros_outros"]
-    outros_str = ", ".join(f"{sub}={n}" for sub, n in sorted(outros.items()))
-    W(f"**2015-04-09, subsistema N:** {e['dia_2015_04_09_registros_N']} registros nesse dia")
-    W(f"(dia inteiro ausente). Mesma data, outros subsistemas: {outros_str}.")
+    W("**2015-04-09 — nenhum dos 4 subsistemas tem dado válido nesse dia,**")
+    W("por duas formas distintas de ausência na mesma fonte:")
+    W("")
+    W("| Subsistema | Linhas | Valores vazios | Forma de ausência |")
+    W("|---|---|---|---|")
+    for sub in ["N", "NE", "S", "SE"]:
+        info = e["dia_2015_04_09"][sub]
+        forma = "linha ausente" if info["n_linhas"] == 0 else "linha presente, valor vazio"
+        W(f"| {sub} | {info['n_linhas']} | {info['n_vazias']} | {forma} |")
+    W("")
+    W("**Nota:** são duas formas distintas de ausência na mesma fonte. A forma")
+    W("\"linha presente, valor vazio\" (NE, S, SE — 24 linhas, 24 valores vazios cada)")
+    W("é a mesma observada nos 4 vazios de início de DST em outubro (seção D). A forma")
+    W("\"linha ausente\" (N — 0 linhas) só ocorre nesta data.")
     W("")
     W("---")
     W("")
