@@ -25,6 +25,14 @@ TZ = ZoneInfo("America/Sao_Paulo")
 N_AMOSTRAS_VAZAMENTO = 30
 SEED_VAZAMENTO = 42
 
+# Janelas usadas pelos lags e médias móveis — única fonte de verdade, usada tanto
+# no cálculo real (calcular_lags, calcular_medias_moveis) quanto na fórmula
+# independente de NaN esperado (calcular_nan_esperado_*). Se alguém mudar uma
+# janela aqui, o NaN esperado muda junto — não pode divergir em silêncio.
+LAGS_HORAS = [24, 48, 168, 336]
+JANELA_DIAS_MEDIA_168H = 7
+JANELA_DIAS_MESMA_HORA_7D = 7
+
 
 class SanityCheckError(RuntimeError):
     pass
@@ -121,10 +129,7 @@ def calcular_is_feriado(timestamps: pd.Series) -> pd.Series:
 def calcular_lags(df: pd.DataFrame) -> pd.DataFrame:
     serie = df.set_index("din_instante")["val_cargaenergiahomwmed"].sort_index().asfreq("h")
     saida = pd.DataFrame({
-        "lag_24h": serie.shift(24),
-        "lag_48h": serie.shift(48),
-        "lag_168h": serie.shift(168),
-        "lag_336h": serie.shift(336),
+        f"lag_{h}h": serie.shift(h) for h in LAGS_HORAS
     })
     return saida.reindex(df["din_instante"].values).set_axis(df.index)
 
@@ -147,8 +152,8 @@ def calcular_medias_moveis(df: pd.DataFrame) -> pd.DataFrame:
 
     daily_mean = pivot.mean(axis=1, skipna=True)
     media_24h_por_dia = daily_mean.shift(1)
-    media_168h_por_dia = daily_mean.shift(1).rolling(window=7, min_periods=7).mean()
-    media_mesma_hora_pivot = pivot.shift(1).rolling(window=7, min_periods=7).mean()
+    media_168h_por_dia = daily_mean.shift(1).rolling(window=JANELA_DIAS_MEDIA_168H, min_periods=JANELA_DIAS_MEDIA_168H).mean()
+    media_mesma_hora_pivot = pivot.shift(1).rolling(window=JANELA_DIAS_MESMA_HORA_7D, min_periods=JANELA_DIAS_MESMA_HORA_7D).mean()
 
     media_24h = tmp["data"].map(media_24h_por_dia)
     media_168h = tmp["data"].map(media_168h_por_dia)
@@ -159,6 +164,135 @@ def calcular_medias_moveis(df: pd.DataFrame) -> pd.DataFrame:
         "media_168h": media_168h.values,
         "media_mesma_hora_7d": media_mesma_hora_7d,
     }, index=df.index)
+
+
+# ---------------------------------------------------------------------------
+# Gate de NaN esperado — para cada lag/média móvel, deriva o conjunto de
+# timestamps que DEVEM ficar NaN a partir de (janela + NaN brutos propagados),
+# usando uma via de cálculo independente de calcular_lags/calcular_medias_moveis
+# (aritmética de datas sobre os NaN brutos, não shift/rolling do pandas). Se a
+# saída real divergir do esperado, ABORTA — pega regressão silenciosa se alguém
+# mudar uma janela ou um min_periods sem perceber o efeito no NaN.
+# ---------------------------------------------------------------------------
+
+def _dias_totalmente_nan(df: pd.DataFrame) -> list:
+    tmp = df[["din_instante", "val_cargaenergiahomwmed"]].copy()
+    tmp["data"] = tmp["din_instante"].dt.date
+    por_dia = tmp.groupby("data")["val_cargaenergiahomwmed"]
+    nan_por_dia = por_dia.apply(lambda s: int(s.isna().sum()))
+    total_por_dia = por_dia.size()
+    return sorted(d for d in nan_por_dia.index if nan_por_dia[d] == total_por_dia[d])
+
+
+def calcular_nan_esperado_lag(df: pd.DataFrame, lag_horas: int) -> set:
+    """NaN esperado em lag_Nh = (1) as primeiras N horas da série (sem histórico
+    suficiente) UNIÃO (2) para cada timestamp com valor bruto NaN em T0, o alvo
+    T0+N horas (se existir na série) — o lag desse alvo aponta de volta para T0."""
+    serie = df.set_index("din_instante")["val_cargaenergiahomwmed"].sort_index().asfreq("h")
+    fim = serie.index[-1]
+
+    esperado = set(serie.index[:lag_horas])
+    raw_nan_ts = serie.index[serie.isna()]
+    for t0 in raw_nan_ts:
+        alvo = t0 + pd.Timedelta(hours=lag_horas)
+        if alvo <= fim:
+            esperado.add(alvo)
+    return esperado
+
+
+def calcular_nan_esperado_media_24h(df: pd.DataFrame) -> set:
+    """NaN esperado em media_24h = dias sem D-1 (primeiro dia da série) UNIÃO dias
+    cujo D-1 está inteiramente vazio (24 valores brutos NaN nesse D-1)."""
+    dias = sorted(df["din_instante"].dt.date.unique())
+    dias_validos = set(dias)
+    dias_esperados = {dias[0]}
+    for d0 in _dias_totalmente_nan(df):
+        candidato = d0 + timedelta(days=1)
+        if candidato in dias_validos:
+            dias_esperados.add(candidato)
+    return dias_esperados
+
+
+def calcular_nan_esperado_media_168h(df: pd.DataFrame) -> set:
+    """NaN esperado em media_168h = primeiros JANELA_DIAS_MEDIA_168H dias da série
+    (sem histórico suficiente) UNIÃO, para cada dia totalmente vazio D0, os
+    JANELA_DIAS_MEDIA_168H dias seguintes (a janela de 7 dias que os sucede inclui
+    D0, que tem média diária NaN, então min_periods=7 derruba a janela inteira)."""
+    dias = sorted(df["din_instante"].dt.date.unique())
+    dias_validos = set(dias)
+    dias_esperados = set(dias[:JANELA_DIAS_MEDIA_168H])
+    for d0 in _dias_totalmente_nan(df):
+        for k in range(1, JANELA_DIAS_MEDIA_168H + 1):
+            candidato = d0 + timedelta(days=k)
+            if candidato in dias_validos:
+                dias_esperados.add(candidato)
+    return dias_esperados
+
+
+def calcular_nan_esperado_mesma_hora_7d(df: pd.DataFrame) -> set:
+    """NaN esperado em media_mesma_hora_7d, por par (dia, hora) = primeiros
+    JANELA_DIAS_MESMA_HORA_7D dias × todas as 24 horas (sem histórico) UNIÃO, para
+    cada (T0=dia D0/hora h0) com valor bruto NaN, os pares (D0+k, h0) para
+    k=1..JANELA_DIAS_MESMA_HORA_7D (a mesma hora h0, nos 7 dias seguintes, perde 1
+    das 7 amostras por causa de T0 — min_periods derruba a janela inteira)."""
+    tmp = df[["din_instante", "val_cargaenergiahomwmed"]].copy()
+    tmp["data"] = tmp["din_instante"].dt.date
+    tmp["hora"] = tmp["din_instante"].dt.hour
+
+    dias = sorted(tmp["data"].unique())
+    dias_validos = set(dias)
+    primeiros = set(dias[:JANELA_DIAS_MESMA_HORA_7D])
+
+    pares_esperados = {(d, h) for d in primeiros for h in range(24)}
+    brutos_nan = tmp[tmp["val_cargaenergiahomwmed"].isna()]
+    for d0, h0 in zip(brutos_nan["data"], brutos_nan["hora"]):
+        for k in range(1, JANELA_DIAS_MESMA_HORA_7D + 1):
+            candidato = d0 + timedelta(days=k)
+            if candidato in dias_validos:
+                pares_esperados.add((candidato, h0))
+    return pares_esperados
+
+
+def verificar_nan_esperado(df: pd.DataFrame, features: pd.DataFrame) -> None:
+    erros = []
+
+    for lag_horas in LAGS_HORAS:
+        col = f"lag_{lag_horas}h"
+        esperado = calcular_nan_esperado_lag(df, lag_horas)
+        observado = set(features.loc[features[col].isna(), "din_instante"])
+        if esperado != observado:
+            faltando = sorted(str(t) for t in (esperado - observado))[:5]
+            sobrando = sorted(str(t) for t in (observado - esperado))[:5]
+            erros.append(f"{col}: NaN observado != esperado. faltando={faltando} sobrando={sobrando}")
+
+    esperado_24h = calcular_nan_esperado_media_24h(df)
+    observado_24h = set(features.loc[features["media_24h"].isna(), "din_instante"].dt.date)
+    if esperado_24h != observado_24h:
+        erros.append(
+            f"media_24h: dias NaN observados != esperado. "
+            f"faltando={sorted(esperado_24h - observado_24h)[:5]} sobrando={sorted(observado_24h - esperado_24h)[:5]}"
+        )
+
+    esperado_168h = calcular_nan_esperado_media_168h(df)
+    observado_168h = set(features.loc[features["media_168h"].isna(), "din_instante"].dt.date)
+    if esperado_168h != observado_168h:
+        erros.append(
+            f"media_168h: dias NaN observados != esperado. "
+            f"faltando={sorted(esperado_168h - observado_168h)[:5]} sobrando={sorted(observado_168h - esperado_168h)[:5]}"
+        )
+
+    esperado_mesma_hora = calcular_nan_esperado_mesma_hora_7d(df)
+    obs_mh = features.loc[features["media_mesma_hora_7d"].isna(), "din_instante"]
+    observado_mesma_hora = set(zip(obs_mh.dt.date, obs_mh.dt.hour))
+    if esperado_mesma_hora != observado_mesma_hora:
+        erros.append(
+            f"media_mesma_hora_7d: pares (dia,hora) NaN observados != esperado. "
+            f"faltando={sorted(esperado_mesma_hora - observado_mesma_hora)[:5]} "
+            f"sobrando={sorted(observado_mesma_hora - esperado_mesma_hora)[:5]}"
+        )
+
+    if erros:
+        raise SanityCheckError("NaN observado diverge do NaN esperado (janela + NaN bruto propagado):\n" + "\n".join(erros))
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +414,10 @@ def main():
     if len(features) != len(df):
         raise SanityCheckError(f"Saída tem {len(features)} linhas, entrada tem {len(df)} — não pode haver remoção de linha.")
 
+    print("\nVerificando NaN esperado (janela + NaN bruto propagado) para lags e médias móveis...")
+    verificar_nan_esperado(df, features)
+    print("  OK — NaN observado bate com o esperado em todas as 7 features (4 lags + 3 médias móveis).")
+
     print(f"\nTestando vazamento: {N_AMOSTRAS_VAZAMENTO} timestamps aleatórios (seed={SEED_VAZAMENTO})...")
     resultado = testar_vazamento(df, features, N_AMOSTRAS_VAZAMENTO, SEED_VAZAMENTO)
 
@@ -307,6 +445,7 @@ def main():
             continue
         n_nan = int(features[col].isna().sum())
         print(f"  {col}: {n_nan} NaN")
+    print("\nGate de NaN esperado (janela + NaN bruto propagado): OK, 0 divergências em lag_24h/48h/168h/336h e media_24h/168h/mesma_hora_7d.")
 
     print("\n=== TESTE DE VAZAMENTO ===")
     print(f"Timestamps amostrados: {resultado['n_timestamps_amostrados']} (seed={SEED_VAZAMENTO})")

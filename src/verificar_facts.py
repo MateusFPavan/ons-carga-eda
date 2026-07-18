@@ -5,6 +5,7 @@ divergência — não corrige nada.
 """
 import json
 import re
+import sys
 import zipfile
 from io import StringIO
 from pathlib import Path
@@ -227,6 +228,7 @@ def main():
         print(f"\n{len(erros)} DIVERGÊNCIA(S) ENCONTRADA(S):")
         for desc, esp, obt in erros:
             print(f"  - {desc}: facts={esp!r} vs recalculo={obt!r}")
+        sys.exit(1)
     else:
         print("\nNenhuma divergência encontrada em todos os itens verificados.")
 
