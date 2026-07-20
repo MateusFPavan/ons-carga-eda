@@ -124,7 +124,8 @@ def calcular_mae_insample_naive1(df: pd.DataFrame, inicio_avaliacao: pd.Timestam
     return mae, n_pares_validos
 
 
-def avaliar_modelo(df: pd.DataFrame, previsto: pd.DataFrame, mae_insample_naive1: float) -> dict:
+def avaliar_modelo(df: pd.DataFrame, previsto: pd.DataFrame, mae_insample_naive1: float,
+                    mae_insample_naive_sazonal: float) -> dict:
     avaliacao = previsto.merge(
         df[["din_instante", "val_cargaenergiahomwmed", "is_dst_transition"]],
         on="din_instante", how="left", validate="one_to_one",
@@ -139,11 +140,13 @@ def avaliar_modelo(df: pd.DataFrame, previsto: pd.DataFrame, mae_insample_naive1
 
     incluida = avaliacao[motivo == "incluida"].copy()
     incluida["erro"] = incluida["previsto"] - incluida["real"]
+    avaliacao.loc[incluida.index, "erro"] = incluida["erro"]
 
     mape = float((incluida["erro"].abs() / incluida["real"].abs()).mean() * 100)
     rmse = float(np.sqrt((incluida["erro"] ** 2).mean()))
     mae = float(incluida["erro"].abs().mean())
-    mase = mae / mae_insample_naive1
+    mase_naive1 = mae / mae_insample_naive1
+    mase_sazonal = mae / mae_insample_naive_sazonal
 
     return {
         "n_total": len(avaliacao),
@@ -152,9 +155,23 @@ def avaliar_modelo(df: pd.DataFrame, previsto: pd.DataFrame, mae_insample_naive1
         "mape": mape,
         "rmse": rmse,
         "mae": mae,
-        "mase": mase,
+        "mase_naive1": mase_naive1,
+        "mase_sazonal": mase_sazonal,
         "avaliacao": avaliacao,
     }
+
+
+def calcular_mae_insample_naive_sazonal(df: pd.DataFrame, inicio_avaliacao: pd.Timestamp, lag_horas: int = 168) -> tuple:
+    """Denominador alternativo do MASE: MAE do naive SAZONAL SEMANAL (lag=168h)
+    IN-SAMPLE sobre o treino. Convenção da literatura de carga e base de
+    comparação com Simeone (2026), cujo MASE ~0,31 usa naive sazonal como
+    referência."""
+    treino = df.loc[df["din_instante"] < inicio_avaliacao].sort_values("din_instante")
+    serie = treino.set_index("din_instante")["val_cargaenergiahomwmed"].asfreq("h")
+    diffs_abs = (serie - serie.shift(lag_horas)).abs()
+    mae = float(diffs_abs.mean())
+    n_pares_validos = int(diffs_abs.notna().sum())
+    return mae, n_pares_validos
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +188,61 @@ def checar_cobertura_cmo(ano_inicio: int, ano_fim: int) -> dict:
         else:
             anos_ausentes.append(ano)
     return {"anos_presentes": anos_presentes, "anos_ausentes": anos_ausentes, "completo": len(anos_ausentes) == 0}
+
+
+def carregar_cmo_horario_se(anos: list) -> pd.Series:
+    """CMO do SE, agregado de 30min para grade horária pela MÉDIA das duas
+    semi-horas — decisão travada em FACTS.md seção H/K1. Retorna série indexada
+    por din_instante horário (hora local, mesma convenção da carga — fato
+    derivado, FACTS.md seção K3, reconfirmado para 2025-2026 nesta rodada)."""
+    frames = []
+    for ano in anos:
+        fpath = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        dfc = pd.read_parquet(fpath, columns=["id_subsistema", "din_instante", "val_cmo"])
+        dfc["id_subsistema"] = dfc["id_subsistema"].astype(str)
+        # val_cmo diverge de dtype entre anos (float64 em 2024-2025, str em 2026 —
+        # mesmo padrão de divergência já documentado para a carga em FACTS.md seção
+        # B). Cast explícito, sempre — não confiar no dtype de origem.
+        dfc["val_cmo"] = pd.to_numeric(dfc["val_cmo"], errors="coerce")
+        frames.append(dfc[dfc["id_subsistema"] == "SE"])
+    cmo_se = pd.concat(frames, ignore_index=True)
+    n_nao_conversiveis = int(cmo_se["val_cmo"].isna().sum())
+    if n_nao_conversiveis:
+        print(f"  AVISO: {n_nao_conversiveis} valores de val_cmo não puderam ser convertidos para número (viraram NaN).")
+    cmo_se["hora_local"] = cmo_se["din_instante"].dt.floor("h")
+    media_horaria = cmo_se.groupby("hora_local")["val_cmo"].mean()
+    return media_horaria.rename("cmo_horario")
+
+
+def calcular_custo(avaliacao: pd.DataFrame, cmo_horario: pd.Series) -> dict:
+    """custo = |erro_MW| x CMO_horário x 1h (ESCOPO.md seção 12a). Aplicado só às
+    horas já incluídas na métrica estatística (motivo_exclusao == 'incluida') e
+    que além disso têm CMO disponível — horas sem CMO ficam fora do custo, mas
+    permanecem na estatística."""
+    incluida_stat = avaliacao[avaliacao["motivo_exclusao"] == "incluida"].copy()
+    incluida_stat["cmo"] = incluida_stat["din_instante"].map(cmo_horario)
+    tem_cmo = incluida_stat["cmo"].notna()
+
+    custo_base = incluida_stat[tem_cmo].copy()
+    custo_base["erro_abs"] = custo_base["erro"].abs()
+    custo_base["custo"] = custo_base["erro_abs"] * custo_base["cmo"]
+
+    custo_total = float(custo_base["custo"].sum())
+    custo_medio_hora = float(custo_base["custo"].mean())
+    limiar_p90 = float(custo_base["cmo"].quantile(0.90))
+    top10 = custo_base[custo_base["cmo"] >= limiar_p90]
+    pct_custo_top10 = float(top10["custo"].sum() / custo_total * 100) if custo_total else float("nan")
+
+    return {
+        "n_incluida_estatistica": len(incluida_stat),
+        "n_sem_cmo": int((~tem_cmo).sum()),
+        "n_incluida_custo": len(custo_base),
+        "custo_total": custo_total,
+        "custo_medio_hora": custo_medio_hora,
+        "limiar_p90_cmo": limiar_p90,
+        "n_horas_top10pct_cmo": int(len(top10)),
+        "pct_custo_top10pct_cmo": pct_custo_top10,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -194,12 +266,17 @@ def main():
     serie_alvo = df.set_index("din_instante")["val_cargaenergiahomwmed"].sort_index()
 
     mae_insample_naive1, n_pares_treino = calcular_mae_insample_naive1(df, INICIO_AVALIACAO)
-    print(f"\nDenominador do MASE (Hyndman): MAE do naive-1-passo (lag=1h) IN-SAMPLE no treino "
+    print(f"\nDenominador 1 do MASE (Hyndman padrão): MAE do naive-1-passo (lag=1h) IN-SAMPLE no treino "
           f"(din_instante < {INICIO_AVALIACAO.date()}), {n_pares_treino} pares válidos = {mae_insample_naive1:.4f}")
     print("ATENÇÃO: este denominador é de 1 HORA à frente (persistência simples), não é o horizonte")
     print("day-ahead nem sazonal — é a definição padrão de Hyndman, não recalibrada para o horizonte")
     print("avaliado aqui. Séries horárias de carga têm forte autocorrelação hora-a-hora, então o")
     print("denominador tende a ser pequeno e o MASE dos naives day-ahead tende a ficar > 1 — não é bug.")
+
+    mae_insample_naive_sazonal, n_pares_treino_sazonal = calcular_mae_insample_naive_sazonal(df, INICIO_AVALIACAO, 168)
+    print(f"\nDenominador 2 do MASE (naive sazonal semanal, lag=168h) IN-SAMPLE no treino "
+          f"(din_instante < {INICIO_AVALIACAO.date()}), {n_pares_treino_sazonal} pares válidos = {mae_insample_naive_sazonal:.4f}")
+    print("Convenção da literatura de STLF e base de comparação com Simeone (2026, MASE~0,31, denom naive sazonal).")
 
     modelos = {
         "naive_semanal (REGUA, lag_168h)": previsor_naive(168),
@@ -210,7 +287,7 @@ def main():
     for nome, previsor in modelos.items():
         print(f"\n=== {nome} ===")
         previsto = rodar_walkforward(serie_alvo, origens, previsor)
-        resultado = avaliar_modelo(df, previsto, mae_insample_naive1)
+        resultado = avaliar_modelo(df, previsto, mae_insample_naive1, mae_insample_naive_sazonal)
         resultados[nome] = resultado
 
         print(f"Horas-alvo totais no período: {resultado['n_total']}")
@@ -220,7 +297,8 @@ def main():
         print(f"MAPE: {resultado['mape']:.4f}%")
         print(f"RMSE: {resultado['rmse']:.4f} MWh/h")
         print(f"MAE:  {resultado['mae']:.4f} MWh/h")
-        print(f"MASE: {resultado['mase']:.4f} (denominador: naive-1-passo in-sample, ver acima)")
+        print(f"MASE (denom naive-1passo):  {resultado['mase_naive1']:.4f}")
+        print(f"MASE (denom naive-sazonal): {resultado['mase_sazonal']:.4f}")
 
         print(f"Testando vazamento: {N_AMOSTRAS_VAZAMENTO} origens aleatórias (seed={SEED_VAZAMENTO})...")
         teste = testar_vazamento(serie_alvo, previsto, previsor, nome, N_AMOSTRAS_VAZAMENTO, SEED_VAZAMENTO)
@@ -244,6 +322,14 @@ def main():
         )
     print("OK — os dois modelos produzem previsões diferentes, como esperado (lags diferentes).")
 
+    # --- MASE(denom sazonal) do naive semanal deve ficar ~1,0 por construção
+    # (numerador e denominador usam o mesmo lag=168h; a diferença é só treino
+    # in-sample vs. avaliação out-of-sample 2024+, então não é exatamente 1,0)
+    nome_semanal = nomes[0] if "semanal" in nomes[0] else nomes[1]
+    mase_semanal_sazonal = resultados[nome_semanal]["mase_sazonal"]
+    print(f"\nMASE (denom naive-sazonal) do {nome_semanal}: {mase_semanal_sazonal:.4f} "
+          f"({'~1,0 confirmado' if abs(mase_semanal_sazonal - 1.0) < 0.15 else 'ATENÇÃO: não ficou perto de 1,0'})")
+
     # --- métrica de custo: checar cobertura de CMO antes de tentar calcular
     print("\n=== MÉTRICA DE CUSTO ===")
     cobertura = checar_cobertura_cmo(INICIO_AVALIACAO.year, fim_serie.year)
@@ -254,13 +340,32 @@ def main():
             f"\nPARADO ANTES DA MÉTRICA DE CUSTO: faltam os arquivos "
             f"{[f'cmo_semi_horario_{a}.parquet' for a in cobertura['anos_ausentes']]} em {CUSTO_DIR}."
         )
-        print("O período de avaliação (2024-01-01 até o fim da série) exige CMO para todos os anos nesse")
-        print("intervalo; só 2024 foi baixado (amostra da sondagem). Não vou baixar nada nem extrapolar/")
-        print("inventar CMO para os anos ausentes — isso precisa ser decidido e baixado antes de calcular")
-        print("custo total, custo médio por hora, ou a concentração de custo nas horas de CMO mais alto.")
+        print("Não vou baixar nada nem extrapolar/inventar CMO para os anos ausentes.")
     else:
-        print("Cobertura de CMO completa para o período de avaliação — cálculo de custo não implementado")
-        print("nesta rodada (não houve necessidade, cobertura já estava completa).")
+        cmo_horario = carregar_cmo_horario_se(cobertura["anos_presentes"])
+        print(f"CMO horário do SE carregado: {len(cmo_horario)} horas, "
+              f"{cmo_horario.index.min()} a {cmo_horario.index.max()}.")
+
+        custos = {}
+        for nome in nomes:
+            custo = calcular_custo(resultados[nome]["avaliacao"], cmo_horario)
+            custos[nome] = custo
+            print(f"\n--- Custo: {nome} ---")
+            print(f"Horas incluídas na métrica estatística: {custo['n_incluida_estatistica']}")
+            print(f"Horas sem CMO (excluídas só do custo): {custo['n_sem_cmo']}")
+            print(f"Horas incluídas na métrica de custo: {custo['n_incluida_custo']}")
+            print(f"Custo total do período: R$ {custo['custo_total']:,.2f}")
+            print(f"Custo médio por hora: R$ {custo['custo_medio_hora']:,.4f}")
+            print(f"Limiar do decil 90 do CMO horário: {custo['limiar_p90_cmo']:.4f} R$/MWh "
+                  f"({custo['n_horas_top10pct_cmo']} horas)")
+            print(f"% do custo total vindo dessas 10% horas de CMO mais alto: {custo['pct_custo_top10pct_cmo']:.4f}%")
+
+        print("\n--- Ranking: erro estatístico (MAE) vs. custo ---")
+        ranking_mae = sorted(nomes, key=lambda n: resultados[n]["mae"])
+        ranking_custo = sorted(nomes, key=lambda n: custos[n]["custo_total"])
+        print(f"Ranking por MAE (melhor->pior): {ranking_mae}")
+        print(f"Ranking por custo total (melhor->pior): {ranking_custo}")
+        print(f"Rankings coincidem: {'sim' if ranking_mae == ranking_custo else 'não'}")
 
     print("\nNenhum arquivo .md gerado. Nenhuma conclusão interpretativa — números e contagens acima.")
 

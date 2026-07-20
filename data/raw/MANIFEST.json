@@ -137,6 +137,28 @@
     "status": "ok",
     "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_tm/CMO_SEMIHORARIO_2024.parquet"
   },
+  "custo/cmo_semi_horario_2025.parquet": {
+    "downloaded_at_local": "2026-07-20T15:46:45.592615-03:00",
+    "downloaded_at_utc": "2026-07-20T18:46:45.592615+00:00",
+    "fonte": "ONS Dados Abertos",
+    "http_etag": "\"f8735cc3d5137f075b9a12ecb4ff70fc\"",
+    "http_last_modified": "Sat, 31 Jan 2026 22:01:30 GMT",
+    "sha256": "1e1d7a97ad2fcce28b86f37cbde21483c29ddc6902abb347d92b8372bb32f4b1",
+    "size_bytes": 431531,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_tm/CMO_SEMIHORARIO_2025.parquet"
+  },
+  "custo/cmo_semi_horario_2026.parquet": {
+    "downloaded_at_local": "2026-07-20T15:46:47.203802-03:00",
+    "downloaded_at_utc": "2026-07-20T18:46:47.203802+00:00",
+    "fonte": "ONS Dados Abertos",
+    "http_etag": "\"45c48165a43e852838f1280f96fffcda\"",
+    "http_last_modified": "Mon, 20 Jul 2026 15:01:02 GMT",
+    "sha256": "e12e6010c5b65ba0cff448acafd5fa27a02c8204d398044e36b41a5f9090436c",
+    "size_bytes": 259266,
+    "status": "ok",
+    "url": "https://ons-aws-prod-opendata.s3.amazonaws.com/dataset/cmo_tm/CMO_SEMIHORARIO_2026.parquet"
+  },
   "custo/cvu_usina_termica_2024.parquet": {
     "downloaded_at_local": "2026-07-17T11:24:35.744048-03:00",
     "downloaded_at_utc": "2026-07-17T14:24:35.744048+00:00",
