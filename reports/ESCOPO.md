@@ -383,6 +383,15 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
   horas específicas em mais de 10% cada — a métrica de custo em nível de hora
   individual é sensível a essa escolha, mesmo que o total anual não seja (seção
   12b).
+- Contaminação de pré-treino do Chronos-2 não pode ser descartada nem confirmada: o
+  relatório técnico do modelo (arXiv:2510.15821, Tabela 6) documenta datasets do
+  domínio de energia/eletricidade no corpus de pré-treino (Electricity, London Smart
+  Meters, Buildings 900K, Solar, Wind Farms), mas não menciona nenhuma fonte
+  brasileira ou do ONS — a ausência de menção não é prova de ausência, só de não
+  documentação. Auditar por completo o corpus de pré-treino de um foundation model
+  de terceiros não é possível a partir daqui; isso é uma limitação inerente a
+  qualquer avaliação zero-shot desse tipo de modelo sobre séries públicas, não
+  específica deste projeto.
 
 ### Extensões possíveis
 
