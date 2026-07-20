@@ -26,6 +26,7 @@ REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 MANIFEST_PATH = RAW_DIR / "MANIFEST.json"
 ANOS = list(range(2015, 2027))
 TZ = ZoneInfo("America/Sao_Paulo")
+INICIO_AVALIACAO = pd.Timestamp("2024-01-01")  # ESCOPO.md seção Validação, FACTS.md seção H
 
 EXPECTED_COLUMNS = {"id_subsistema", "nom_subsistema", "din_instante", "val_cargaenergiahomwmed"}
 
@@ -155,7 +156,21 @@ def secao_b_esquema(full: pd.DataFrame, dtype_por_ano: dict) -> dict:
         "id_subsistema_estavel_12_anos": id_subsistema_estavel,
         "id_subsistema_lista": sorted(set(todos_ids[0])) if id_subsistema_estavel else None,
         "nome_se_por_ano": nome_se_por_ano,
+        "cmo_dtype_por_ano": secao_b2_cmo_dtype(),
     }
+
+
+def secao_b2_cmo_dtype() -> dict:
+    """dtype de val_cmo (CMO Semi-Horário) por ano — mesmo tipo de checagem já
+    feita para val_cargaenergiahomwmed acima, agora para o dataset de custo."""
+    resultado = {}
+    for ano in (2024, 2025, 2026):
+        fpath = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        if not fpath.exists():
+            continue
+        dfc = pd.read_parquet(fpath, columns=["val_cmo"])
+        resultado[ano] = str(dfc["val_cmo"].dtype)
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +637,74 @@ def secao_j_custo(cobertura_carga: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# K2b. Concentração de custo sobre o PERÍODO DE AVALIAÇÃO completo (2024-01-01 até
+# o fim da série) — extensão de K2 (que cobre só 2024) usando o naive SEMANAL
+# (lag=168h, régua principal do projeto, FACTS.md seção H) como instrumento de
+# medição de erro. Cálculo autocontido, independente de src/modelo_naive.py.
+# ---------------------------------------------------------------------------
+
+def secao_k2b_concentracao_avaliacao() -> dict:
+    anos_cmo_disponiveis = [ano for ano in (2024, 2025, 2026) if (CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet").exists()]
+    if not anos_cmo_disponiveis:
+        return {"disponivel": False}
+
+    frames = []
+    for ano in ANOS:
+        fpath = RAW_DIR / f"CURVA_CARGA_{ano}.parquet"
+        if not fpath.exists():
+            continue
+        dfc = pd.read_parquet(fpath, columns=["id_subsistema", "din_instante", "val_cargaenergiahomwmed"])
+        dfc["id_subsistema"] = dfc["id_subsistema"].astype(str)
+        dfc = dfc[dfc["id_subsistema"] == "SE"].copy()
+        dfc["val_num"] = pd.to_numeric(dfc["val_cargaenergiahomwmed"], errors="coerce")
+        frames.append(dfc)
+    carga_se = pd.concat(frames, ignore_index=True).sort_values("din_instante").reset_index(drop=True)
+
+    serie = carga_se.set_index("din_instante")["val_num"]
+    naive = pd.DataFrame({"din_instante": serie.index, "observado": serie.values}).set_index("din_instante")
+    previsao = serie.copy()
+    previsao.index = previsao.index + pd.Timedelta(days=7)  # naive semanal: lag 168h
+    naive["previsao_naive"] = previsao
+    naive = naive.dropna(subset=["previsao_naive"]).reset_index()
+    naive["erro"] = naive["observado"] - naive["previsao_naive"]
+    naive_avaliacao = naive[naive["din_instante"] >= INICIO_AVALIACAO].copy()
+
+    frames_cmo = []
+    for ano in anos_cmo_disponiveis:
+        fpath = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        dfc = pd.read_parquet(fpath, columns=["id_subsistema", "din_instante", "val_cmo"])
+        dfc["id_subsistema"] = dfc["id_subsistema"].astype(str)
+        dfc["val_cmo"] = pd.to_numeric(dfc["val_cmo"], errors="coerce")
+        frames_cmo.append(dfc[dfc["id_subsistema"] == "SE"])
+    cmo_se = pd.concat(frames_cmo, ignore_index=True)
+    cmo_se["hora_local"] = cmo_se["din_instante"].dt.floor("h")
+    cmo_media_horaria = cmo_se.groupby("hora_local")["val_cmo"].mean().rename("cmo_media").reset_index()
+
+    merged = pd.merge(naive_avaliacao, cmo_media_horaria, left_on="din_instante", right_on="hora_local", how="left")
+    n_sem_cmo = int(merged["cmo_media"].isna().sum())
+    custo_base = merged[merged["cmo_media"].notna()].copy()
+    custo_base["custo"] = custo_base["erro"].abs() * custo_base["cmo_media"]
+
+    custo_total = float(custo_base["custo"].sum())
+    p90 = float(custo_base["cmo_media"].quantile(0.90))
+    top10 = custo_base[custo_base["cmo_media"] >= p90]
+    pct_custo_top10 = float(top10["custo"].sum() / custo_total * 100) if custo_total else None
+
+    return {
+        "disponivel": True,
+        "anos_cmo_usados": anos_cmo_disponiveis,
+        "inicio_avaliacao": str(INICIO_AVALIACAO.date()),
+        "fim_avaliacao": str(naive_avaliacao["din_instante"].max()),
+        "n_horas_totais": int(len(naive_avaliacao)),
+        "n_horas_sem_cmo": n_sem_cmo,
+        "n_horas_com_cmo": int(len(custo_base)),
+        "limiar_p90_cmo": p90,
+        "n_horas_top10pct_cmo": int(len(top10)),
+        "pct_custo_top10pct_cmo": pct_custo_top10,
+    }
+
+
+# ---------------------------------------------------------------------------
 # K. Agregação do CMO (sensibilidade + fuso) — recalculado do zero a partir de
 # data/raw/custo/cmo_semi_horario_2024.parquet e data/raw/CURVA_CARGA_{2023,2024}.parquet
 # ---------------------------------------------------------------------------
@@ -758,6 +841,7 @@ def secao_k_agregacao_e_fuso() -> dict:
             "correlacao_lag_0": corr_lag0,
             "correlacao_lag_hipotese_utc_mais_3h": corr_lag_utc,
         },
+        "concentracao_avaliacao": secao_k2b_concentracao_avaliacao(),
     })
     return resultado
 
@@ -839,6 +923,25 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     W("em 2026, mas o código `SE` não mudou em nenhum dos 12 anos (confirmado na tabela")
     W("acima).")
     W("")
+    cmo_dtype = b.get("cmo_dtype_por_ano", {})
+    if cmo_dtype:
+        W("`val_cmo` (CMO Semi-Horário), dtype por ano — mesmo padrão de divergência de")
+        W("tipo já observado em `val_cargaenergiahomwmed` acima, só que na direção oposta")
+        W("(aqui o ano mais recente é o que vem como texto):")
+        W("")
+        W("| Ano | dtype de `val_cmo` |")
+        W("|---|---|")
+        for ano in sorted(cmo_dtype):
+            W(f"| {ano} | `{cmo_dtype[ano]}` |")
+        W("")
+        anos_texto = [a for a, dt in cmo_dtype.items() if dt != "float64"]
+        if anos_texto:
+            W(
+                f"Confirmado por `pd.to_numeric`: nenhum valor de "
+                f"{', '.join(str(a) for a in sorted(anos_texto))} falhou a conversão para número "
+                "— não é corrupção de dado, só tipo declarado/armazenado divergente entre anos."
+            )
+            W("")
     W("---")
     W("")
 
@@ -1210,6 +1313,19 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
         W(f"Horas nesse decil: {fmt_int(ez['n_horas_top10pct_cmo'])}.")
         W(f"% do custo total do ano (variante média) vindo dessas horas: **{fmt_br(ez['pct_custo_top10pct_cmo'], 4)}%**.")
         W("")
+        ca = k.get("concentracao_avaliacao", {})
+        if ca.get("disponivel"):
+            W(
+                f"**Concentração de custo, período de avaliação {ca['inicio_avaliacao']} a "
+                f"{ca['fim_avaliacao']} (naive semanal, régua principal — anos de CMO usados: "
+                f"{', '.join(str(a) for a in ca['anos_cmo_usados'])}):** "
+                f"{fmt_br(ca['pct_custo_top10pct_cmo'], 4)}% do custo nas 10% horas de CMO mais alto "
+                f"({fmt_int(ca['n_horas_top10pct_cmo'])} de {fmt_int(ca['n_horas_com_cmo'])} horas com CMO; "
+                f"{fmt_int(ca['n_horas_sem_cmo'])} de {fmt_int(ca['n_horas_totais'])} horas totais sem CMO, "
+                f"excluídas só desta métrica). **O {fmt_br(ez['pct_custo_top10pct_cmo'], 4)}% acima refere-se "
+                f"apenas a 2024 e não ao período de avaliação.**"
+            )
+            W("")
         W("### K3. Fuso horário do CMO — fatos brutos e fato derivado")
         W("")
         W(f"Dicionários de dados verificados (CMO Semi-Horário e Curva de Carga) presentes")

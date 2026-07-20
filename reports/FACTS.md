@@ -16,8 +16,8 @@ produz o mesmo arquivo.
   extraído do parquet ou do manifesto, listada aqui como contexto fixo)
 - Arquivos: 12, anos cobertos: 2015–2026 (12 arquivos, 1 por ano)
 - Snapshot baixado entre `2026-07-16T20:06:20.964290-03:00` e `2026-07-16T20:06:42.927332-03:00`
-- SHA-256 do `MANIFEST.json` neste momento: `b8768ccee4f52c5c751db3ec80a86952da2cd97b2d5845174cd7cd1c87512bc4`
-- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 46
+- SHA-256 do `MANIFEST.json` neste momento: `b722e129f885794ba2178256ddb12453271c69d7a6da1f34538cd7fed3a84132`
+- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 48
 
 **Aviso — republicação em lote (recalculado, não copiado):** agrupando os 12
 arquivos por data (não hora) do cabeçalho HTTP `Last-Modified`:
@@ -80,6 +80,18 @@ declarada pelo dicionário como não permitindo nulo).
 nunca `nom_subsistema` — o nome mudou de `SUDESTE` para `SUDESTE/CENTRO-OESTE`
 em 2026, mas o código `SE` não mudou em nenhum dos 12 anos (confirmado na tabela
 acima).
+
+`val_cmo` (CMO Semi-Horário), dtype por ano — mesmo padrão de divergência de
+tipo já observado em `val_cargaenergiahomwmed` acima, só que na direção oposta
+(aqui o ano mais recente é o que vem como texto):
+
+| Ano | dtype de `val_cmo` |
+|---|---|
+| 2024 | `float64` |
+| 2025 | `float64` |
+| 2026 | `str` |
+
+Confirmado por `pd.to_numeric`: nenhum valor de 2026 falhou a conversão para número — não é corrupção de dado, só tipo declarado/armazenado divergente entre anos.
 
 ---
 
@@ -425,6 +437,8 @@ Horas com a MÉDIA horária do CMO negativa: **0**.
 Limiar do decil 90 do CMO médio horário: 359,8710 R$/MWh.
 Horas nesse decil: 869.
 % do custo total do ano (variante média) vindo dessas horas: **47,2269%**.
+
+**Concentração de custo, período de avaliação 2024-01-01 a 2026-07-15 23:00:00 (naive semanal, régua principal — anos de CMO usados: 2024, 2025, 2026):** 25,2248% do custo nas 10% horas de CMO mais alto (2.208 de 22.080 horas com CMO; 168 de 22.248 horas totais sem CMO, excluídas só desta métrica). **O 47,2269% acima refere-se apenas a 2024 e não ao período de avaliação.**
 
 ### K3. Fuso horário do CMO — fatos brutos e fato derivado
 

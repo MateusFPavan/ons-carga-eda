@@ -394,9 +394,10 @@ Exploradas apenas se o dado sustentar, não prometidas:
    modelos? Comparar a degradação dos foundation models vs. SARIMA (que estima do
    próprio dado) na janela da quebra.
 2. O ranking de modelos por erro estatístico (MASE/RMSE) coincide com o ranking por
-   custo de despacho em CMO, dado que ~47% do custo se concentra em 10% das horas
-   (FACTS.md seção K)? Se um modelo com MASE pior vencer no custo por acertar as
-   horas caras, a métrica estatística engana para decisão operacional.
+   custo de despacho em CMO, dado que ~25% do custo se concentra em 10% das horas
+   no período de avaliação 2024-2026 (FACTS.md seção K — o ~47% ali é só 2024, não
+   o período de avaliação)? Se um modelo com MASE pior vencer no custo por acertar
+   as horas caras, a métrica estatística engana para decisão operacional.
 
 ---
 
