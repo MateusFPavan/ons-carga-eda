@@ -171,6 +171,22 @@ de complexidade adicional sobre o anterior. Nenhum resultado de modelo (além do
 sazonal-naive usado como instrumento de medição nas sondagens já feitas) existe
 ainda.
 
+**Referência externa:** Simeone (2026, arXiv:2602.10848) avaliou quatro foundation
+models (Chronos-Bolt, Chronos-2, Moirai-2, TinyTimeMixer) contra Prophet, SARIMA e
+Seasonal Naive em dados horários de carga do ERCOT (Texas, 2020-2024), em hardware de
+consumidor. Reportou MASE ~0,31 em contexto longo (2048h, day-ahead), redução de ~47%
+sobre o Seasonal Naive, e calibração variável entre modelos (Chronos-2 bem calibrado;
+Moirai-2 e Prophet superconfiantes).
+
+Este resultado é tratado como HIPÓTESE A TESTAR no contexto brasileiro, NÃO como
+conclusão a reproduzir. A pergunta "foundation model bate a baseline clássica"
+permanece ABERTA para o SE/CO até ser medida no dado brasileiro. O dado do ERCOT não
+contém as três quebras estruturais brasileiras (fim do DST em 2019, pandemia, grade
+temporal) nem preço de despacho brasileiro. Convergência com Simeone (MASE próximo de
+0,31) confirmaria o achado fora do contexto original; divergência seria o ponto de
+partida para investigar as particularidades do SE/CO. Contexto de 2048h é adotado
+como configuração de referência dos foundation models, seguindo o protocolo dele.
+
 ---
 
 ## 10. Estacionariedade e sazonalidade
@@ -189,6 +205,27 @@ Walk-forward: a previsão será testada avançando no tempo, nunca com dado do f
 disponível para o modelo em nenhum ponto do treino. O conjunto de teste final é
 tocado uma única vez, ao final, para reportar o número de avaliação do projeto — não
 usado para ajustar hiperparâmetro nem para escolher entre modelos candidatos.
+
+**Período de avaliação:** inicia em 2024-01-01 e vai até o fim da série (2026).
+Walk-forward day-ahead com origem deslizante: cada previsão usa todo o histórico
+disponível ANTERIOR à sua origem (inclusive meses de 2024-2026 já decorridos), nunca
+dados posteriores. O período de avaliação é tocado uma única vez.
+
+Justificativa do início em 2024:
+
+- coincide com a disponibilidade de temperatura sem vazamento (2024-01-20) e está
+  dentro do período de CMO (2020+), permitindo avaliar erro estatístico, custo e a
+  camada de temperatura sobre o mesmo período.
+- deixa toda a pandemia e ambos os regimes de DST no passado das origens de
+  previsão, disponíveis como contexto de treino.
+- garante contexto contíguo >= 2048h antes de cada origem (histórico desde 2015),
+  configuração de referência dos foundation models.
+- ~2,5 anos de avaliação, centenas de origens day-ahead.
+- consistente com o protocolo de STLF e de Simeone (2026): avaliação em janela
+  recente com walk-forward day-ahead.
+
+**Nota:** isto NÃO reduz o treino a <=2023. O modelo de carga usa todo o histórico
+disponível em cada origem, como já declarado nas seções 5 e 12e.
 
 ---
 
@@ -346,6 +383,20 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
   horas específicas em mais de 10% cada — a métrica de custo em nível de hora
   individual é sensível a essa escolha, mesmo que o total anual não seja (seção
   12b).
+
+### Extensões possíveis
+
+Exploradas apenas se o dado sustentar, não prometidas:
+
+1. A vantagem zero-shot dos foundation models — atribuída por Simeone ao
+   reconhecimento de padrões do pré-treino — se sustenta ao cruzar a quebra do fim
+   do DST (2019), um regime provavelmente ausente do corpus de pré-treino desses
+   modelos? Comparar a degradação dos foundation models vs. SARIMA (que estima do
+   próprio dado) na janela da quebra.
+2. O ranking de modelos por erro estatístico (MASE/RMSE) coincide com o ranking por
+   custo de despacho em CMO, dado que ~47% do custo se concentra em 10% das horas
+   (FACTS.md seção K)? Se um modelo com MASE pior vencer no custo por acertar as
+   horas caras, a métrica estatística engana para decisão operacional.
 
 ---
 

@@ -1262,6 +1262,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     W("| Custo: CMO Semi-Horário agregado para grade horária pela MÉDIA das 2 semi-horas; CVU e CMO Semanal descartados | CVU exigiria modelar ordem de mérito; CMO Semanal tem granularidade insuficiente (seção J1); média testada contra máximo e primeira semi-hora, diferença de custo total pequena (seção K1) |")
     W("| Métrica de custo aplicada só ao período de teste (2020+), não ao treino | CMO Semi-Horário não cobre 2015–2019 (seção J1/J6) |")
     W("| Modelo principal (2015–2026) avaliado por MAPE/RMSE; custo é camada de avaliação, não de treino | Separa a qualidade estatística da previsão (todo o histórico) da tradução em custo (limitada pela cobertura do CMO) |")
+    W("| Período de avaliação: inicia 2024-01-01, walk-forward day-ahead, origem deslizante usando todo o passado disponível, contexto >=2048h, tocado uma vez | Ver ESCOPO.md seção Validação |")
     W("")
     W("---")
     W("")
