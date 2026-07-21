@@ -20,6 +20,18 @@ dobrar o custo computacional só para ter dois níveis de cobertura.
 Reusa gerar_origens, rodar_walkforward, avaliar_modelo, testar_vazamento,
 calcular_mae_insample_naive1/sazonal, checar_cobertura_cmo, carregar_cmo_horario_se,
 calcular_custo de src/modelo_naive.py — não reimplementa nada disso.
+
+NOTA SOBRE O TESTE DE VAZAMENTO (commit f87138a vs. sanidade seguinte): a primeira
+rodada completa reportou 720/720 "divergências" no teste de vazamento. PROVADO (não
+suposto) em src/verificar_determinismo_prophet.py que a causa é não-determinismo
+numérico do otimizador Stan/L-BFGS do Prophet (threading de BLAS/OpenMP e ausência
+de seed fixa) — com STAN_NUM_THREADS/OMP_NUM_THREADS/MKL_NUM_THREADS/
+OPENBLAS_NUM_THREADS/NUMEXPR_NUM_THREADS/VECLIB_MAXIMUM_THREADS=1 e seed fixa
+passada a `Prophet.fit(..., seed=...)`, as mesmas 30 origens amostradas bateram
+bit a bit (0/720 divergências) — NÃO é vazamento de dado do dia D. Este script não
+fixa essas variáveis (o walk-forward completo já rodou e os números da tabela
+comparativa são válidos); qualquer nova rodada completa de Prophet deveria fixá-las
+para manter o teste de vazamento confiável.
 """
 import logging
 import sys
