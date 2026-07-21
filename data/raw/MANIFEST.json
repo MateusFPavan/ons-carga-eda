@@ -249,6 +249,15 @@
     "status": "ok",
     "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-19.9167&longitude=-43.9345&hourly=temperature_2m_previous_day1&start_date=2024-01-01&end_date=2025-12-31&timezone=America%2FSao_Paulo"
   },
+  "temperatura/openmeteo_previous_day1_Belo_Horizonte_fev_jul2026.json": {
+    "downloaded_at_local": "2026-07-20T23:13:12.909931-03:00",
+    "downloaded_at_utc": "2026-07-21T02:13:12.909931+00:00",
+    "fonte": "Open-Meteo Previous Runs API",
+    "sha256": "b3a935636b3318e0e932fd19cd07616a58a29214966d8a214ef50d9b1201a67d",
+    "size_bytes": 95355,
+    "status": "ok",
+    "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-19.9167&longitude=-43.9345&hourly=temperature_2m_previous_day1&start_date=2026-02-01&end_date=2026-07-15&timezone=America%2FSao_Paulo"
+  },
   "temperatura/openmeteo_previous_day1_Belo_Horizonte_jan2024.json": {
     "downloaded_at_local": "2026-07-16T22:40:33.938331-03:00",
     "downloaded_at_utc": "2026-07-17T01:40:33.938331+00:00",
@@ -284,6 +293,15 @@
     "size_bytes": 421374,
     "status": "ok",
     "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-15.7797&longitude=-47.9297&hourly=temperature_2m_previous_day1&start_date=2024-01-01&end_date=2025-12-31&timezone=America%2FSao_Paulo"
+  },
+  "temperatura/openmeteo_previous_day1_Brasilia_fev_jul2026.json": {
+    "downloaded_at_local": "2026-07-20T23:13:17.548617-03:00",
+    "downloaded_at_utc": "2026-07-21T02:13:17.548617+00:00",
+    "fonte": "Open-Meteo Previous Runs API",
+    "sha256": "893bfff22a6c9a0c376a93808402313f7b361544c0271a72010677e11c1c3985",
+    "size_bytes": 95358,
+    "status": "ok",
+    "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-15.7797&longitude=-47.9297&hourly=temperature_2m_previous_day1&start_date=2026-02-01&end_date=2026-07-15&timezone=America%2FSao_Paulo"
   },
   "temperatura/openmeteo_previous_day1_Brasilia_jan2024.json": {
     "downloaded_at_local": "2026-07-16T22:40:59.361996-03:00",
@@ -321,6 +339,15 @@
     "status": "ok",
     "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-16.6869&longitude=-49.2648&hourly=temperature_2m_previous_day1&start_date=2024-01-01&end_date=2025-12-31&timezone=America%2FSao_Paulo"
   },
+  "temperatura/openmeteo_previous_day1_Goiania_fev_jul2026.json": {
+    "downloaded_at_local": "2026-07-20T23:13:22.415368-03:00",
+    "downloaded_at_utc": "2026-07-21T02:13:22.415368+00:00",
+    "fonte": "Open-Meteo Previous Runs API",
+    "sha256": "af52b7b725b1ed076e56bbc514d62708efa8a094577280db89f937691798937b",
+    "size_bytes": 95357,
+    "status": "ok",
+    "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-16.6869&longitude=-49.2648&hourly=temperature_2m_previous_day1&start_date=2026-02-01&end_date=2026-07-15&timezone=America%2FSao_Paulo"
+  },
   "temperatura/openmeteo_previous_day1_Goiania_jan2024.json": {
     "downloaded_at_local": "2026-07-16T22:41:24.992781-03:00",
     "downloaded_at_utc": "2026-07-17T01:41:24.992781+00:00",
@@ -357,6 +384,15 @@
     "status": "ok",
     "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-22.9068&longitude=-43.1729&hourly=temperature_2m_previous_day1&start_date=2024-01-01&end_date=2025-12-31&timezone=America%2FSao_Paulo"
   },
+  "temperatura/openmeteo_previous_day1_Rio_de_Janeiro_fev_jul2026.json": {
+    "downloaded_at_local": "2026-07-20T23:13:08.020218-03:00",
+    "downloaded_at_utc": "2026-07-21T02:13:08.020218+00:00",
+    "fonte": "Open-Meteo Previous Runs API",
+    "sha256": "268a00058574551405f33e866cc9b8e649b5af18d926215403be03f86ee46ae1",
+    "size_bytes": 95356,
+    "status": "ok",
+    "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-22.9068&longitude=-43.1729&hourly=temperature_2m_previous_day1&start_date=2026-02-01&end_date=2026-07-15&timezone=America%2FSao_Paulo"
+  },
   "temperatura/openmeteo_previous_day1_Rio_de_Janeiro_jan2024.json": {
     "downloaded_at_local": "2026-07-16T22:40:30.765091-03:00",
     "downloaded_at_utc": "2026-07-17T01:40:30.765091+00:00",
@@ -392,6 +428,15 @@
     "size_bytes": 421255,
     "status": "ok",
     "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-23.5505&longitude=-46.6333&hourly=temperature_2m_previous_day1&start_date=2024-01-01&end_date=2025-12-31&timezone=America%2FSao_Paulo"
+  },
+  "temperatura/openmeteo_previous_day1_Sao_Paulo_fev_jul2026.json": {
+    "downloaded_at_local": "2026-07-20T23:12:43.146858-03:00",
+    "downloaded_at_utc": "2026-07-21T02:12:43.146858+00:00",
+    "fonte": "Open-Meteo Previous Runs API",
+    "sha256": "6cf2748bc2b19ab4f1b3210b0baca0a45b691f10ec03c1a3508c36ce268bb030",
+    "size_bytes": 95331,
+    "status": "ok",
+    "url": "https://previous-runs-api.open-meteo.com/v1/forecast?latitude=-23.5505&longitude=-46.6333&hourly=temperature_2m_previous_day1&start_date=2026-02-01&end_date=2026-07-15&timezone=America%2FSao_Paulo"
   },
   "temperatura/openmeteo_previous_day1_Sao_Paulo_jan2024.json": {
     "downloaded_at_local": "2026-07-16T22:40:26.568874-03:00",
