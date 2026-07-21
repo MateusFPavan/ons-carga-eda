@@ -7,3 +7,30 @@
 [2026-07-20T23:21:21] FASE 1: alinhamento por din_instante correto (sem deslocamento de índice): OK
 [2026-07-20T23:21:21] FASE 1: salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\features_temperatura.parquet
 [2026-07-20T23:21:21] FASE 1: CONCLUÍDA
+[2026-07-20T23:21:21] COMMIT OK: temperatura fase 1: features de temperatura
+[2026-07-20T23:21:21] FASE 2: iniciando Prophet + temperatura (contexto nominal 2 anos, truncado por cobertura)
+[2026-07-20T23:21:23] FASE 2 FALHOU: Dataframe has less than 2 non-NaN rows.
+Traceback (most recent call last):
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\run_temperatura_pipeline.py", line 435, in main
+    fase2_prophet_temp(df, temp_df, origens, serie_alvo, mae1, mae_saz, cmo_horario)
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\run_temperatura_pipeline.py", line 187, in fase2_prophet_temp
+    previsto = rodar_walkforward(serie_alvo, origens, previsor)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\src\modelo_naive.py", line 57, in rodar_walkforward
+    previsao = funcao_previsao(historico, origem)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\run_temperatura_pipeline.py", line 173, in previsor
+    m.fit(train, seed=42)
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\.venv\Lib\site-packages\prophet\forecaster.py", line 1220, in fit
+    model_inputs = self.preprocess(df, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Avell\Documents\Projetos\ons-carga-eda\.venv\Lib\site-packages\prophet\forecaster.py", line 1135, in preprocess
+    raise ValueError('Dataframe has less than 2 non-NaN rows.')
+ValueError: Dataframe has less than 2 non-NaN rows.
+
+[2026-07-20T23:21:23] FASE 3: iniciando Chronos-2 120M + covariáveis (contexto nominal 2048h, truncado por cobertura)
+[2026-07-20T23:52:52] FASE 3: walk-forward concluído em 31.3 min (908 origens)
+[2026-07-20T23:52:52] FASE 3: MAPE=1.7282% RMSE=1279.03 MASE(1passo)=0.6320 MASE(sazonal)=0.4111 cobertura80=77.93% cobertura90=87.34% custo=R$ 2749575816.19
+[2026-07-20T23:52:52] FASE 3: salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\chronos_temp_previsoes.parquet
+[2026-07-20T23:52:52] FASE 3: testando vazamento (30 origens)
+[2026-07-20T23:53:58] FASE 3: vazamento — 720 comparações, 0 divergências
