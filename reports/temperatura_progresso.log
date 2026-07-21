@@ -59,3 +59,12 @@ ValueError: Dataframe has less than 2 non-NaN rows.
 [2026-07-21T02:03:58] FASE 4: progresso 908/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
 [2026-07-21T02:03:58] FASE 4: 908 origens processadas, 350 convergiram (38.5%)
 [2026-07-21T02:03:58] FASE 4: MAPE=61366214.5433% MASE(sazonal)=15115165.7251 custo=R$ 254510906114.29 (sobre origens processadas)
+[2026-07-21T02:03:58] COMMIT OK: temperatura fase 4: SARIMAX
+[2026-07-21T02:03:58] FASE 4: CONCLUÍDA (ou parcial, ver log acima)
+[2026-07-21T02:03:58] FASE 5: iniciando consolidação (só previsões já salvas, sem re-rodar)
+[2026-07-21T02:03:58] FASE 5: Prophet+temp — arquivo ausente (C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\prophet_temp_previsoes.parquet), pulando dessa comparação
+[2026-07-21T02:03:58] FASE 5: Chronos+temp (recorte 2024-01-20+): n=21792 MAPE=1.7282% RMSE=1279.03
+[2026-07-21T02:03:58] FASE 5: SARIMAX+temp (recorte 2024-01-20+): n=21768 MAPE=61366214.5433% RMSE=1898001462489.43
+[2026-07-21T02:03:58] FASE 5: SARIMAX (recorte 2024-01-20+): n=21792 MAPE=5.6895% RMSE=3355.29
+[2026-07-21T02:03:58] FASE 5: resumo consolidado salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\temperatura_consolidacao.parquet
+[2026-07-21T02:03:58] FASE 5: CONCLUÍDA — comparação com/sem detalhada (deltas, estratificação por hora/CMO) fica para a consolidação manual, conforme pedido ("a consolidação final vem depois, comigo")
