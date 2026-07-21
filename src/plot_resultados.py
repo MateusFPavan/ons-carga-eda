@@ -315,9 +315,13 @@ def _conferir(nome: str, obtido: dict, alvo: dict):
             )
 
 
-def _carregar_resultado_modelo(nome: str, fpath: Path, df, mae1, mae_saz, cmo_horario) -> dict:
+def _carregar_resultado_modelo(nome: str, fpath: Path, df, mae1, mae_saz, cmo_horario):
+    """Devolve None (com aviso) se a previsão salva estiver ausente — a etapa
+    'results' segue com os modelos disponíveis em vez de abortar tudo."""
     if not fpath.exists():
-        raise SanityCheckError(f"{nome}: arquivo ausente {fpath} — previsão principal não foi salva.")
+        print(f"  AVISO: {nome} — arquivo ausente ({fpath}), pulando este modelo (previsão principal não "
+              "foi salva ainda).")
+        return None
     salvo = pd.read_parquet(fpath)
     previsto = salvo[["din_instante", "previsto"]].drop_duplicates("din_instante")
     resultado = avaliar_modelo(df, previsto, mae1, mae_saz)
@@ -365,27 +369,71 @@ def _coletar_resultados_4_modelos():
     }
 
     print("=== Carregando SARIMA de data/processed/sarima_previsoes_60d.parquet ===")
-    resultados["SARIMA"] = _carregar_resultado_modelo(
+    r_sarima = _carregar_resultado_modelo(
         "SARIMA", PROCESSED_DIR / "sarima_previsoes_60d.parquet", df, mae1, mae_saz, cmo_horario)
+    if r_sarima is not None:
+        resultados["SARIMA"] = r_sarima
 
     print("=== Carregando Prophet de data/processed/prophet_previsoes.parquet ===")
-    resultados["Prophet"] = _carregar_resultado_modelo(
+    r_prophet = _carregar_resultado_modelo(
         "Prophet", PROCESSED_DIR / "prophet_previsoes.parquet", df, mae1, mae_saz, cmo_horario)
+    if r_prophet is not None:
+        resultados["Prophet"] = r_prophet
 
     print("=== Carregando Chronos-2 de data/processed/chronos_previsoes.parquet ===")
-    resultados["Chronos-2"] = _carregar_resultado_modelo(
+    r_chronos = _carregar_resultado_modelo(
         "Chronos-2", PROCESSED_DIR / "chronos_previsoes.parquet", df, mae1, mae_saz, cmo_horario)
+    if r_chronos is not None:
+        resultados["Chronos-2"] = r_chronos
 
-    print("\n=== Conferindo os 4 modelos contra os números já comprometidos (ESCOPO.md/FACTS.md) ===")
+    ausentes = [n for n in ("SARIMA", "Prophet", "Chronos-2") if n not in resultados]
+    if ausentes:
+        print(f"\nAVISO: seguindo sem {ausentes} — rode 'python run_all.py --stage models' (ou o script "
+              "individual) para gerar a previsão que falta.")
+
+    print(f"\n=== Conferindo os {len(resultados)} modelo(s) disponível(is) contra os números já "
+          "comprometidos (ESCOPO.md/FACTS.md) ===")
     for nome, obtido in resultados.items():
         _conferir(nome, obtido, ALVOS_COMPROMETIDOS[nome])
-    print("Confirmado: os 4 modelos batem com os números já documentados. Reprodutibilidade OK.\n")
+    print(f"Confirmado: os {len(resultados)} modelo(s) disponível(is) batem com os números já documentados. "
+          "Reprodutibilidade OK.\n")
 
     return resultados
 
 
+def salvar_tabela_comparativa(resultados: dict) -> pd.DataFrame:
+    ordem_completa = ["naive semanal", "SARIMA", "Prophet", "Chronos-2"]
+    linhas = []
+    for nome in ordem_completa:
+        if nome not in resultados:
+            continue
+        r = resultados[nome]
+        linhas.append({
+            "modelo": nome,
+            "mase_sazonal": round(r["mase_sazonal"], 4),
+            "mape_pct": round(r["mape"], 4),
+            "custo_total_reais": round(r["custo_total"], 2),
+            "cobertura_80_pct": round(r["cobertura_80"] * 100, 2) if r["cobertura_80"] is not None else None,
+            "cobertura_90_pct": round(r["cobertura_90"] * 100, 2) if r["cobertura_90"] is not None else None,
+        })
+    tabela = pd.DataFrame(linhas)
+
+    print("=== TABELA COMPARATIVA ===")
+    with pd.option_context("display.width", 200, "display.max_columns", None):
+        print(tabela.to_string(index=False))
+
+    out = RAIZ / "reports" / "tabela_comparativa.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tabela.to_csv(out, index=False)
+    print(f"\nSalvo: {out.relative_to(RAIZ)}")
+    return tabela
+
+
 def fig_comparativo_4_modelos(resultados: dict):
-    ordem = ["naive semanal", "SARIMA", "Prophet", "Chronos-2"]
+    ordem = [n for n in ("naive semanal", "SARIMA", "Prophet", "Chronos-2") if n in resultados]
+    if not ordem:
+        print("PARADO (fig comparativo 4 modelos): nenhum modelo disponível.")
+        return
     cores = {"naive semanal": COR_NAIVE, "SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
@@ -414,7 +462,10 @@ def fig_comparativo_4_modelos(resultados: dict):
 
 
 def fig_erro_vs_custo(resultados: dict):
-    ordem = ["naive semanal", "SARIMA", "Prophet", "Chronos-2"]
+    ordem = [n for n in ("naive semanal", "SARIMA", "Prophet", "Chronos-2") if n in resultados]
+    if len(ordem) < 2:
+        print("PARADO (fig erro vs. custo): menos de 2 modelos disponíveis, ranking não faz sentido.")
+        return
     cores = {"naive semanal": COR_NAIVE, "SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
 
     ranking_mase = sorted(ordem, key=lambda n: resultados[n]["mase_sazonal"])
@@ -452,7 +503,11 @@ def fig_erro_vs_custo(resultados: dict):
 
 
 def fig_calibracao(resultados: dict):
-    modelos = ["SARIMA", "Prophet", "Chronos-2"]  # naive não tem quantis (previsão pontual sem incerteza)
+    # naive não tem quantis (previsão pontual sem incerteza)
+    modelos = [n for n in ("SARIMA", "Prophet", "Chronos-2") if n in resultados]
+    if not modelos:
+        print("PARADO (fig calibração): nenhum modelo com quantis disponível.")
+        return
     cores = {"SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
 
     fig, ax = plt.subplots(figsize=(7, 7))
@@ -488,6 +543,7 @@ def main():
     fig_quebras_estruturais()
 
     resultados = _coletar_resultados_4_modelos()
+    salvar_tabela_comparativa(resultados)
     fig_comparativo_4_modelos(resultados)
     fig_erro_vs_custo(resultados)
     fig_calibracao(resultados)

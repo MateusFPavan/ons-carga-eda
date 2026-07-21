@@ -16,8 +16,8 @@ produz o mesmo arquivo.
   extraído do parquet ou do manifesto, listada aqui como contexto fixo)
 - Arquivos: 12, anos cobertos: 2015–2026 (12 arquivos, 1 por ano)
 - Snapshot baixado entre `2026-07-16T20:06:20.964290-03:00` e `2026-07-16T20:06:42.927332-03:00`
-- SHA-256 do `MANIFEST.json` neste momento: `b722e129f885794ba2178256ddb12453271c69d7a6da1f34538cd7fed3a84132`
-- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 48
+- SHA-256 do `MANIFEST.json` neste momento: `655d2af507cdb6f582a52c7e05ecb86656f2db03ebf446e846a7dc8749c547fa`
+- Total de entradas no manifesto (inclui arquivos de temperatura de sessões posteriores): 53
 
 **Aviso — republicação em lote (recalculado, não copiado):** agrupando os 12
 arquivos por data (não hora) do cabeçalho HTTP `Last-Modified`:

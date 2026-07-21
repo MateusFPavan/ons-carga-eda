@@ -1,12 +1,25 @@
 """run_all.py — entry point único de reprodutibilidade do projeto (reports/ESCOPO.md,
-seção 15). Ordem fixa: verificar integridade de data/raw/ contra MANIFEST.json ->
-gerar_facts -> verificar_facts -> limpar -> gerar_features.
+seção 15). Estagios (--stage):
 
-Cada etapa aborta a cadeia inteira se falhar (código de saída != 0 do subprocesso, ou
-divergência de hash). Não baixa nada — só verifica o que já está em disco e roda o
-pipeline de geração sobre esse dado. Modelagem ainda não existe neste projeto, então
-não faz parte desta cadeia.
+  data      pipeline de dados: verificar MANIFEST -> gerar_facts -> verificar_facts ->
+            limpar -> gerar_features. ~40s. Não muda nada aqui.
+  results   NÃO treina nada. Lê as previsões já salvas em data/processed/, recalcula
+            MAPE/MASE(sazonal)/custo/calibração com as MESMAS funções usadas para
+            gerá-las, confere contra os números já comprometidos em ESCOPO.md/
+            FACTS.md (aborta se divergir), salva reports/tabela_comparativa.csv e os
+            gráficos de reports/figures/ (src/plot_resultados.py). ~1min.
+  models    RE-TREINA (naive/SARIMA/Prophet/Chronos-2), sobrescrevendo as previsões
+            salvas. ~4h (Prophet domina, ~2h50min). Pede confirmação interativa, ou
+            use --yes para pular o prompt.
+  all-fast  data + results, em cadeia. DEFAULT — o que um avaliador roda para
+            reproduzir o RESULTADO (tabela + gráficos) sem re-treinar nada. ~1-2min.
+
+Cada etapa aborta a cadeia inteira se falhar (código de saída != 0 do subprocesso,
+divergência de hash, ou divergência de métrica contra FACTS.md). Os estágios 'data' e
+'results' não baixam nem treinam nada — só verificam/recalculam o que já está em
+disco. 'models' é a única exceção (re-treina) e por isso exige confirmação.
 """
+import argparse
 import hashlib
 import json
 import subprocess
@@ -82,7 +95,12 @@ def etapa_rodar_script(nome_script: str):
     return rodar
 
 
-ETAPAS = [
+# ---------------------------------------------------------------------------
+# Etapas por estágio — a lógica de cada script/verificação não muda aqui, só a
+# orquestração de quais rodar e em que ordem.
+# ---------------------------------------------------------------------------
+
+DATA_ETAPAS = [
     ("Verificar MANIFEST (hashes)", etapa_verificar_manifest),
     ("gerar_facts.py", etapa_rodar_script("gerar_facts.py")),
     ("verificar_facts.py", etapa_rodar_script("verificar_facts.py")),
@@ -90,12 +108,26 @@ ETAPAS = [
     ("gerar_features.py", etapa_rodar_script("gerar_features.py")),
 ]
 
+RESULTS_ETAPAS = [
+    ("Tabela comparativa + gráficos (plot_resultados.py)", etapa_rodar_script("plot_resultados.py")),
+]
 
-def main() -> None:
-    print("=== run_all.py — pipeline de reprodutibilidade ===")
+# ordem: naive é instantâneo, SARIMA/Chronos são baratos perto do Prophet — rodar
+# Prophet por último não muda o tempo total, mas deixa os resultados rápidos
+# disponíveis (data/processed/) antes do gargalo.
+MODELS_ETAPAS = [
+    ("modelo_naive.py (~instante)", etapa_rodar_script("modelo_naive.py")),
+    ("modelo_chronos2.py (~6min, config vencedora 120M@2048h)", etapa_rodar_script("modelo_chronos2.py")),
+    ("modelo_sarima.py (~80min)", etapa_rodar_script("modelo_sarima.py")),
+    ("modelo_prophet.py (~2h50min, dominante)", etapa_rodar_script("modelo_prophet.py")),
+]
+
+
+def rodar_etapas(etapas, titulo: str) -> None:
+    print(f"=== run_all.py — {titulo} ===")
     tempos = []
 
-    for nome, funcao in ETAPAS:
+    for nome, funcao in etapas:
         print(f"\n--- {nome} ---")
         inicio = time.monotonic()
         try:
@@ -113,11 +145,69 @@ def main() -> None:
         tempos.append((nome, duracao))
         print(f"--- OK ({duracao:.2f}s) ---")
 
-    print("\n=== RESUMO DE TEMPOS ===")
+    print(f"\n=== RESUMO DE TEMPOS — {titulo} ===")
     for nome, duracao in tempos:
         print(f"  {nome}: {duracao:.2f}s")
     print(f"  TOTAL: {sum(d for _, d in tempos):.2f}s")
-    print("\nPipeline completo — todas as etapas passaram.")
+    print(f"\n{titulo}: todas as etapas passaram.")
+
+
+def confirmar_models(pular_prompt: bool) -> None:
+    print(
+        "\n=== ATENÇÃO: --stage models vai RE-TREINAR os modelos, sobrescrevendo as previsões "
+        "salvas em data/processed/ ===\n"
+        "  modelo_naive.py     ~instante\n"
+        "  modelo_chronos2.py  ~6min   (config vencedora, não o sweep de 10 combinações)\n"
+        "  modelo_sarima.py    ~80min\n"
+        "  modelo_prophet.py   ~2h50min (dominante)\n"
+        "  TOTAL ESTIMADO: ~4h\n"
+    )
+    if pular_prompt:
+        print("--yes informado: seguindo sem confirmação interativa.")
+        return
+    try:
+        resposta = input("Confirma rodar --stage models (~4h)? Digite 'sim' para continuar: ").strip().lower()
+    except EOFError:
+        print("\nERRO: sessão não-interativa (stdin sem entrada) e --yes não foi passado — não vou "
+              "disparar ~4h de treino sem confirmação explícita.", file=sys.stderr)
+        sys.exit(1)
+    if resposta != "sim":
+        print("Cancelado pelo usuário.")
+        sys.exit(0)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="run_all.py",
+        description="Entry point de reprodutibilidade do projeto — ver docstring do módulo para detalhes.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Custo de cada estágio:\n"
+            "  data       ~40s    — pipeline de dados (verificar/limpar/gerar features), não baixa nada\n"
+            "  results    ~1min   — recalcula métricas das previsões JÁ SALVAS + gera tabela e gráficos\n"
+            "  models     ~4h     — RE-TREINA os 4 modelos (SARIMA ~80min, Prophet ~2h50min, Chronos ~6min)\n"
+            "  all-fast   ~1-2min — data + results (DEFAULT). Reproduz o RESULTADO sem re-treinar.\n"
+        ),
+    )
+    parser.add_argument(
+        "--stage", choices=["data", "results", "models", "all-fast"], default="all-fast",
+        help="Estágio a rodar (default: all-fast).",
+    )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Só usado com --stage models: pula a confirmação interativa antes de disparar ~4h de treino.",
+    )
+    args = parser.parse_args()
+
+    if args.stage == "data":
+        rodar_etapas(DATA_ETAPAS, "estágio 'data'")
+    elif args.stage == "results":
+        rodar_etapas(RESULTS_ETAPAS, "estágio 'results'")
+    elif args.stage == "models":
+        confirmar_models(args.yes)
+        rodar_etapas(MODELS_ETAPAS, "estágio 'models'")
+    elif args.stage == "all-fast":
+        rodar_etapas(DATA_ETAPAS + RESULTS_ETAPAS, "estágio 'all-fast' (data + results, sem re-treinar)")
 
 
 if __name__ == "__main__":

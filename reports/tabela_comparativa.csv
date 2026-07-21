@@ -1,0 +1,5 @@
+modelo,mase_sazonal,mape_pct,custo_total_reais,cobertura_80_pct,cobertura_90_pct
+naive semanal,1.2732,5.3727,8515852974.95,,
+SARIMA,1.3412,5.6805,8403964892.57,84.48,92.52
+Prophet,1.1669,4.9947,7858945781.45,76.47,86.2
+Chronos-2,0.4363,1.8235,3006870002.48,79.35,
