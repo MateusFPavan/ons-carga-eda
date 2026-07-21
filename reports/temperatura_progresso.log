@@ -34,3 +34,28 @@ ValueError: Dataframe has less than 2 non-NaN rows.
 [2026-07-20T23:52:52] FASE 3: salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\chronos_temp_previsoes.parquet
 [2026-07-20T23:52:52] FASE 3: testando vazamento (30 origens)
 [2026-07-20T23:53:58] FASE 3: vazamento — 720 comparações, 0 divergências
+[2026-07-20T23:53:59] COMMIT OK: temperatura fase 3: Chronos-2
+[2026-07-20T23:53:59] FASE 3: CONCLUÍDA
+[2026-07-20T23:53:59] FASE 4: iniciando SARIMAX + temperatura (contexto nominal 60d, truncado por cobertura)
+[2026-07-20T23:54:00] FASE 4: origem 2024-01-20 FALHOU (exog contains inf or nans) — pulando
+[2026-07-20T23:57:05] FASE 4: progresso 50/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:04:43] FASE 4: progresso 100/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:11:54] FASE 4: progresso 150/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:19:00] FASE 4: progresso 200/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:26:20] FASE 4: progresso 250/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:34:08] FASE 4: progresso 300/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:41:47] FASE 4: progresso 350/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:49:18] FASE 4: progresso 400/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T00:57:07] FASE 4: progresso 450/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:04:07] FASE 4: progresso 500/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:11:25] FASE 4: progresso 550/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:18:36] FASE 4: progresso 600/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:26:18] FASE 4: progresso 650/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:33:58] FASE 4: progresso 700/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:41:14] FASE 4: progresso 750/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:48:22] FASE 4: progresso 800/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T01:55:38] FASE 4: progresso 850/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T02:02:50] FASE 4: progresso 900/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T02:03:58] FASE 4: progresso 908/908 origens, salvo incrementalmente em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\sarimax_temp_previsoes.parquet
+[2026-07-21T02:03:58] FASE 4: 908 origens processadas, 350 convergiram (38.5%)
+[2026-07-21T02:03:58] FASE 4: MAPE=61366214.5433% MASE(sazonal)=15115165.7251 custo=R$ 254510906114.29 (sobre origens processadas)
