@@ -1,0 +1,9 @@
+[2026-07-20T23:21:20] ======================================================================
+[2026-07-20T23:21:20] INÍCIO DO PIPELINE DE TEMPERATURA (não-supervisionado)
+[2026-07-20T23:21:20] ======================================================================
+[2026-07-20T23:21:21] Período de comparação com temperatura: 2024-01-20 a 2026-07-15 (908 origens)
+[2026-07-20T23:21:21] FASE 1: iniciando integração de features de temperatura
+[2026-07-20T23:21:21] FASE 1: 21792 linhas (2024-01-20 a 2026-07-15), 0 NaN totais nas 5 colunas
+[2026-07-20T23:21:21] FASE 1: alinhamento por din_instante correto (sem deslocamento de índice): OK
+[2026-07-20T23:21:21] FASE 1: salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\features_temperatura.parquet
+[2026-07-20T23:21:21] FASE 1: CONCLUÍDA
