@@ -397,16 +397,28 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
 
 Exploradas apenas se o dado sustentar, não prometidas:
 
-1. A vantagem zero-shot dos foundation models — atribuída por Simeone ao
-   reconhecimento de padrões do pré-treino — se sustenta ao cruzar a quebra do fim
-   do DST (2019), um regime provavelmente ausente do corpus de pré-treino desses
-   modelos? Comparar a degradação dos foundation models vs. SARIMA (que estima do
-   próprio dado) na janela da quebra.
-2. O ranking de modelos por erro estatístico (MASE/RMSE) coincide com o ranking por
-   custo de despacho em CMO, dado que ~25% do custo se concentra em 10% das horas
-   no período de avaliação 2024-2026 (FACTS.md seção K — o ~47% ali é só 2024, não
-   o período de avaliação)? Se um modelo com MASE pior vencer no custo por acertar
-   as horas caras, a métrica estatística engana para decisão operacional.
+1. **Correção (não era testável como escrita originalmente):** a formulação
+   anterior perguntava se "a vantagem zero-shot dos foundation models... se
+   sustenta ao cruzar a quebra do fim do DST (2019)". Isso não é testável no
+   período de avaliação (2024-2026) — o Brasil parou de observar DST em 2019, então
+   não há nenhuma transição de DST dentro do período avaliado (confirmado no
+   diagnóstico de convergência do SARIMA, commit 0339234). A quebra de DST
+   (2015-2019) só existe dentro do CONTEXTO/histórico usado pelos modelos, nunca
+   como alvo de previsão em 2024-2026.
+
+   Pergunta aberta e honesta, reformulada: **um contexto longo que atravessa a
+   descontinuidade de DST (2015-2019) ajuda ou atrapalha a previsão de
+   2024-2026?** — exploração possível, não prometida, valor incerto (pode não
+   haver efeito detectável, já que a quebra fica "diluída" dentro de um contexto
+   muito mais longo que ela).
+2. **Achado confirmado** (deixou de ser extensão possível — já foi medido): o
+   ranking de modelos por erro estatístico (MASE) NÃO coincide com o ranking por
+   custo de despacho em CMO. No período de avaliação 2024-2026, SARIMA e o naive
+   semanal trocam de posição entre as duas métricas — SARIMA tem MASE(sazonal)
+   pior que o naive (1,3412 vs. 1,2732), mas custo total menor (R$ 8,40 bi vs.
+   R$ 8,52 bi) — commit f87138a. Confirma que erro estatístico agregado não prevê
+   custo de despacho, consistente com a concentração de custo em poucas horas de
+   CMO alto (FACTS.md seção K).
 
 ---
 
