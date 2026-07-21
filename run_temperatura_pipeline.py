@@ -131,9 +131,21 @@ def fase1_features_temperatura():
 # util comum: contexto truncado à cobertura de temperatura
 # ---------------------------------------------------------------------------
 
+CONTEXTO_MINIMO_H = 720  # 30 dias — abaixo disso, ajuste com 6 exógenas (dst+5temp) não é confiável
+
+
 def contexto_efetivo_horas(origem: pd.Timestamp, nominal_h: int) -> int:
+    """Retorna None se não há contexto mínimo (30d) disponível ainda — o chamador
+    deve pular a origem, não tentar ajustar com dado insuficiente (corrigido após
+    a 1ª rodada: Prophet quebrou a fase inteira com contexto de 1h; SARIMAX gerou
+    previsões explosivas com poucos dias de dado e 6 exógenas)."""
     disponivel_h = int((origem - INICIO_TEMP) / pd.Timedelta(hours=1))
-    return max(1, min(nominal_h, disponivel_h))
+    if disponivel_h < CONTEXTO_MINIMO_H:
+        return None
+    return min(nominal_h, disponivel_h)
+
+
+LIMITE_PLAUSIVEL_MWH = 200_000  # bem acima do máximo histórico (~62.150) — além disso é explosão numérica, não previsão
 
 
 def montar_cov_temp(temp_df: pd.DataFrame, idx: pd.DatetimeIndex, dst_fn=calcular_dst_ativo) -> dict:
@@ -155,33 +167,41 @@ def fase2_prophet_temp(df, temp_df, origens, serie_alvo, mae1, mae_saz, cmo_hora
     cache = {}
 
     def previsor(historico, origem):
-        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
-        contexto = historico.iloc[-ctx_h:]
         horas_alvo = pd.date_range(origem, periods=24, freq="h")
+        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
+        if ctx_h is None:
+            log(f"FASE 2: origem {origem.date()} SEM contexto mínimo (<30d de temperatura) — NaN, pulando")
+            return pd.Series(np.nan, index=horas_alvo)
 
-        train = pd.DataFrame({"ds": contexto.index, "y": contexto.values})
-        train["dst_ativo"] = calcular_dst_ativo(train["ds"]).astype(float).values
-        train["is_feriado"] = calcular_is_feriado(train["ds"]).astype(float).values
-        for cidade in CIDADES:
-            train[f"temp_{cidade}"] = temp_df[f"temp_{cidade}"].reindex(contexto.index).to_numpy(dtype="float64")
+        contexto = historico.iloc[-ctx_h:]
 
-        m = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=True)
-        m.add_regressor("dst_ativo")
-        m.add_regressor("is_feriado")
-        for cidade in CIDADES:
-            m.add_regressor(f"temp_{cidade}")
-        m.fit(train, seed=42)
+        try:
+            train = pd.DataFrame({"ds": contexto.index, "y": contexto.values})
+            train["dst_ativo"] = calcular_dst_ativo(train["ds"]).astype(float).values
+            train["is_feriado"] = calcular_is_feriado(train["ds"]).astype(float).values
+            for cidade in CIDADES:
+                train[f"temp_{cidade}"] = temp_df[f"temp_{cidade}"].reindex(contexto.index).to_numpy(dtype="float64")
 
-        futuro = pd.DataFrame({"ds": horas_alvo})
-        futuro["dst_ativo"] = calcular_dst_ativo(futuro["ds"]).astype(float).values
-        futuro["is_feriado"] = calcular_is_feriado(futuro["ds"]).astype(float).values
-        for cidade in CIDADES:
-            futuro[f"temp_{cidade}"] = temp_df[f"temp_{cidade}"].reindex(horas_alvo).to_numpy(dtype="float64")
+            m = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=True)
+            m.add_regressor("dst_ativo")
+            m.add_regressor("is_feriado")
+            for cidade in CIDADES:
+                m.add_regressor(f"temp_{cidade}")
+            m.fit(train, seed=42)
 
-        amostras = m.predictive_samples(futuro)["yhat"]
-        p05, p10, mediana, p90, p95 = np.percentile(amostras, [5, 10, 50, 90, 95], axis=1)
-        cache[origem] = {"p05": p05, "p10": p10, "p90": p90, "p95": p95, "ctx_h": ctx_h}
-        return pd.Series(mediana, index=horas_alvo)
+            futuro = pd.DataFrame({"ds": horas_alvo})
+            futuro["dst_ativo"] = calcular_dst_ativo(futuro["ds"]).astype(float).values
+            futuro["is_feriado"] = calcular_is_feriado(futuro["ds"]).astype(float).values
+            for cidade in CIDADES:
+                futuro[f"temp_{cidade}"] = temp_df[f"temp_{cidade}"].reindex(horas_alvo).to_numpy(dtype="float64")
+
+            amostras = m.predictive_samples(futuro)["yhat"]
+            p05, p10, mediana, p90, p95 = np.percentile(amostras, [5, 10, 50, 90, 95], axis=1)
+            cache[origem] = {"p05": p05, "p10": p10, "p90": p90, "p95": p95, "ctx_h": ctx_h}
+            return pd.Series(mediana, index=horas_alvo)
+        except Exception as e:
+            log(f"FASE 2: origem {origem.date()} FALHOU ({e}) — NaN, pulando")
+            return pd.Series(np.nan, index=horas_alvo)
 
     t0 = time.time()
     previsto = rodar_walkforward(serie_alvo, origens, previsor)
@@ -214,20 +234,28 @@ def fase3_chronos_temp(df, temp_df, origens, serie_alvo, mae1, mae_saz, cmo_hora
     cache = {}
 
     def previsor(historico, origem):
-        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
-        contexto_idx = historico.iloc[-ctx_h:].index
         horas_alvo = pd.date_range(origem, periods=24, freq="h")
+        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
+        if ctx_h is None:
+            log(f"FASE 3: origem {origem.date()} SEM contexto mínimo (<30d de temperatura) — NaN, pulando")
+            return pd.Series(np.nan, index=horas_alvo)
+
+        contexto_idx = historico.iloc[-ctx_h:].index
         target = historico.loc[contexto_idx].to_numpy(dtype="float32")
 
-        past_cov = montar_cov_temp(temp_df, contexto_idx)
-        future_cov = montar_cov_temp(temp_df, horas_alvo)
-        past_cov = {k: v.astype("float32") for k, v in past_cov.items()}
-        future_cov = {k: v.astype("float32") for k, v in future_cov.items()}
+        try:
+            past_cov = montar_cov_temp(temp_df, contexto_idx)
+            future_cov = montar_cov_temp(temp_df, horas_alvo)
+            past_cov = {k: v.astype("float32") for k, v in past_cov.items()}
+            future_cov = {k: v.astype("float32") for k, v in future_cov.items()}
 
-        quantis, _ = pipeline.predict_quantiles(
-            inputs=[{"target": target, "past_covariates": past_cov, "future_covariates": future_cov}],
-            prediction_length=24, quantile_levels=[0.05, 0.1, 0.5, 0.9, 0.95],
-        )
+            quantis, _ = pipeline.predict_quantiles(
+                inputs=[{"target": target, "past_covariates": past_cov, "future_covariates": future_cov}],
+                prediction_length=24, quantile_levels=[0.05, 0.1, 0.5, 0.9, 0.95],
+            )
+        except Exception as e:
+            log(f"FASE 3: origem {origem.date()} FALHOU ({e}) — NaN, pulando")
+            return pd.Series(np.nan, index=horas_alvo)
         arr = np.asarray(quantis[0][0])
         cache[origem] = {"p05": arr[:, 0], "p10": arr[:, 1], "p90": arr[:, 3], "p95": arr[:, 4], "ctx_h": ctx_h}
         return pd.Series(arr[:, 2], index=horas_alvo)
@@ -271,9 +299,16 @@ def fase4_sarimax_temp(df, temp_df, origens, serie_alvo, mae1, mae_saz, cmo_hora
             break
         idx_corte = serie_alvo.index.searchsorted(origem)
         historico = serie_alvo.iloc[:idx_corte]
-        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
-        contexto = historico.iloc[-ctx_h:]
         horas_alvo = pd.date_range(origem, periods=24, freq="h")
+        ctx_h = contexto_efetivo_horas(origem, NOMINAL_H)
+        if ctx_h is None:
+            log(f"FASE 4: origem {origem.date()} SEM contexto mínimo (<30d de temperatura) — pulando")
+            for h in horas_alvo:
+                linhas_salvas.append({"din_instante": h, "origem": origem, "previsto": np.nan,
+                                       "p10": np.nan, "p90": np.nan, "p05": np.nan, "p95": np.nan,
+                                       "convergiu": False, "ctx_h": 0, "erro_fit": "contexto insuficiente"})
+            continue
+        contexto = historico.iloc[-ctx_h:]
         y = contexto.to_numpy(dtype="float64")
 
         cov_hist = montar_cov_temp(temp_df, contexto.index)
@@ -290,6 +325,14 @@ def fase4_sarimax_temp(df, temp_df, origens, serie_alvo, mae1, mae_saz, cmo_hora
             ic80 = np.asarray(prev.conf_int(alpha=0.20))
             ic90 = np.asarray(prev.conf_int(alpha=0.10))
             convergiu = bool(resultado.mle_retvals.get("converged", False))
+            # sanidade: descarta explosao numerica (coeficiente instavel passando
+            # despercebido por enforce_stationarity=False) como nao-convergencia,
+            # nao como previsao valida
+            if np.any(np.abs(media) > LIMITE_PLAUSIVEL_MWH) or not np.all(np.isfinite(media)):
+                convergiu = False
+                media = np.full(24, np.nan)
+                ic80 = np.full((24, 2), np.nan)
+                ic90 = np.full((24, 2), np.nan)
             for j, h in enumerate(horas_alvo):
                 linhas_salvas.append({"din_instante": h, "origem": origem, "previsto": media[j],
                                        "p10": ic80[j, 0], "p90": ic80[j, 1], "p05": ic90[j, 0], "p95": ic90[j, 1],

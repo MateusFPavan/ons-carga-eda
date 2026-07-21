@@ -68,3 +68,7 @@ ValueError: Dataframe has less than 2 non-NaN rows.
 [2026-07-21T02:03:58] FASE 5: SARIMAX (recorte 2024-01-20+): n=21792 MAPE=5.6895% RMSE=3355.29
 [2026-07-21T02:03:58] FASE 5: resumo consolidado salvo em C:\Users\Avell\Documents\Projetos\ons-carga-eda\data\processed\temperatura_consolidacao.parquet
 [2026-07-21T02:03:58] FASE 5: CONCLUÍDA — comparação com/sem detalhada (deltas, estratificação por hora/CMO) fica para a consolidação manual, conforme pedido ("a consolidação final vem depois, comigo")
+[2026-07-21T02:03:58] COMMIT OK: temperatura fase 5: consolidacao
+[2026-07-21T02:03:58] ======================================================================
+[2026-07-21T02:03:58] PIPELINE FINALIZADO (ver acima quais fases completaram/falharam/pularam)
+[2026-07-21T02:03:58] ======================================================================
