@@ -8,11 +8,17 @@ Gráficos:
   2. Concentração de custo — curva de Lorenz-like (naive semanal, período de avaliação)
   3. Efeito da temperatura no Chronos-2 — delta de MAPE por hora e por decil de CMO
   4. Três quebras estruturais — série de carga 2015-2026
+  5. Comparativo 4 modelos — MASE(sazonal) e custo total (naive/SARIMA/Prophet/Chronos-2)
+  6. Erro vs. custo — ranking por MASE(sazonal) vs. ranking por custo total
+  7. Calibração — cobertura empírica vs. nominal (80%/90%) para Chronos-2/SARIMA/Prophet
 
-NÃO gerados aqui (ver stdout ao final): comparação de 4 modelos (MASE/custo) e
-calibração — bloqueados por falta de arquivo (previsões principais de Prophet e
-Chronos-2 zero-shot no período 2024-01-01+ nunca foram salvas em parquet, só
-impressas em stdout nos commits f87138a e 59b8dc4).
+Figuras 5-7 dependiam de data/processed/chronos_previsoes.parquet e
+data/processed/prophet_previsoes.parquet — as previsões principais de Prophet e
+Chronos-2 zero-shot no período 2024-01-01+, nunca salvas até o commit que
+acompanha esta atualização (só impressas em stdout nos commits f87138a e
+59b8dc4). Cada uma confere os números recalculados contra os já comprometidos em
+reports/ESCOPO.md/FACTS.md (ver ALVOS_COMPROMETIDOS) e PARA (SanityCheckError) se
+divergir além da tolerância — não gera gráfico com número não reconciliado.
 """
 import sys
 from pathlib import Path
@@ -28,7 +34,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "src"))
 
 from modelo_naive import (  # noqa: E402
-    CARGA_SE_PATH, INICIO_AVALIACAO, avaliar_modelo, calcular_custo,
+    CARGA_SE_PATH, INICIO_AVALIACAO, SanityCheckError, avaliar_modelo, calcular_custo,
     calcular_mae_insample_naive1, calcular_mae_insample_naive_sazonal,
     carregar_cmo_horario_se, checar_cobertura_cmo, gerar_origens,
     previsor_naive, rodar_walkforward, verificar_grade_regular,
@@ -263,6 +269,216 @@ def fig_quebras_estruturais():
     _finalizar(fig, "resultado_4_quebras_estruturais.png")
 
 
+# ---------------------------------------------------------------------------
+# FIGs 5-7 — comparativo de 4 modelos, erro x custo, calibração
+# ---------------------------------------------------------------------------
+
+# Números já comprometidos em reports/ESCOPO.md seção 16 (achado confirmado,
+# commit f87138a) e nas verificações de reprodutibilidade de
+# src/modelo_chronos2.py / src/modelo_prophet.py — usados só para CONFERIR o que
+# é recalculado aqui a partir dos parquets, nunca para plotar diretamente
+# (nenhum número digitado à mão vai para o gráfico).
+ALVOS_COMPROMETIDOS = {
+    "naive semanal": {"mase_sazonal": 1.2732, "custo_total": 8.52e9,
+                       "tol_mase": 0.01, "tol_custo_rel": 0.01},
+    "SARIMA": {"mase_sazonal": 1.3412, "custo_total": 8_403_964_892.57,
+               "tol_mase": 0.002, "tol_custo_rel": 0.005},
+    "Prophet": {"mase_sazonal": 1.1678, "mape": 4.9985, "custo_total": 7_863_385_780.72,
+                "tol_mase": 0.05, "tol_mape": 0.05, "tol_custo_rel": 0.02},
+    "Chronos-2": {"mase_sazonal": 0.4363, "mape": 1.8235, "custo_total": 3_006_870_034.31,
+                  "tol_mase": 0.002, "tol_mape": 0.002, "tol_custo_rel": 0.002},
+}
+
+
+def _conferir(nome: str, obtido: dict, alvo: dict):
+    for chave, tol_chave in (("mase_sazonal", "tol_mase"), ("mape", "tol_mape")):
+        if chave in alvo:
+            diff = abs(obtido[chave] - alvo[chave])
+            ok = diff < alvo[tol_chave]
+            print(f"  {nome} — {chave}: obtido={obtido[chave]:.4f} alvo={alvo[chave]} -> {'OK' if ok else 'DIVERGIU'}")
+            if not ok:
+                raise SanityCheckError(
+                    f"{nome}: {chave} obtido ({obtido[chave]:.4f}) diverge do valor já comprometido "
+                    f"({alvo[chave]}) além da tolerância ({alvo[tol_chave]}) — PARANDO, não gero gráfico "
+                    "com número não reconciliado."
+                )
+    if "custo_total" in alvo:
+        diff_rel = abs(obtido["custo_total"] - alvo["custo_total"]) / alvo["custo_total"]
+        ok = diff_rel < alvo["tol_custo_rel"]
+        print(f"  {nome} — custo_total: obtido=R$ {obtido['custo_total']:,.2f} "
+              f"alvo=R$ {alvo['custo_total']:,.2f} -> {'OK' if ok else 'DIVERGIU'}")
+        if not ok:
+            raise SanityCheckError(
+                f"{nome}: custo_total obtido (R$ {obtido['custo_total']:,.2f}) diverge do valor já "
+                f"comprometido (R$ {alvo['custo_total']:,.2f}) além da tolerância relativa "
+                f"({alvo['tol_custo_rel']}) — PARANDO, não gero gráfico com número não reconciliado."
+            )
+
+
+def _carregar_resultado_modelo(nome: str, fpath: Path, df, mae1, mae_saz, cmo_horario) -> dict:
+    if not fpath.exists():
+        raise SanityCheckError(f"{nome}: arquivo ausente {fpath} — previsão principal não foi salva.")
+    salvo = pd.read_parquet(fpath)
+    previsto = salvo[["din_instante", "previsto"]].drop_duplicates("din_instante")
+    resultado = avaliar_modelo(df, previsto, mae1, mae_saz)
+    custo = calcular_custo(resultado["avaliacao"], cmo_horario) if cmo_horario is not None else None
+    if custo is None:
+        raise SanityCheckError(f"{nome}: CMO indisponível — não dá para conferir custo_total.")
+
+    aval = resultado["avaliacao"].merge(
+        salvo[["din_instante", "p10", "p90"]].drop_duplicates("din_instante"), on="din_instante", how="left")
+    incluida = aval[aval["motivo_exclusao"] == "incluida"]
+    cobertura_80 = float(((incluida["real"] >= incluida["p10"]) & (incluida["real"] <= incluida["p90"])).mean())
+    cobertura_90 = None
+    if "p05" in salvo.columns and "p95" in salvo.columns:
+        aval90 = resultado["avaliacao"].merge(
+            salvo[["din_instante", "p05", "p95"]].drop_duplicates("din_instante"), on="din_instante", how="left")
+        incl90 = aval90[aval90["motivo_exclusao"] == "incluida"]
+        cobertura_90 = float(((incl90["real"] >= incl90["p05"]) & (incl90["real"] <= incl90["p95"])).mean())
+
+    return {
+        "mape": resultado["mape"], "mase_sazonal": resultado["mase_sazonal"],
+        "custo_total": custo["custo_total"], "cobertura_80": cobertura_80, "cobertura_90": cobertura_90,
+    }
+
+
+def _coletar_resultados_4_modelos():
+    df = pd.read_parquet(CARGA_SE_PATH).sort_values("din_instante").reset_index(drop=True)
+    verificar_grade_regular(df)
+    fim_serie = df["din_instante"].max()
+
+    mae1, _ = calcular_mae_insample_naive1(df, INICIO_AVALIACAO)
+    mae_saz, _ = calcular_mae_insample_naive_sazonal(df, INICIO_AVALIACAO, 168)
+    cobertura_cmo = checar_cobertura_cmo(INICIO_AVALIACAO.year, fim_serie.year)
+    if not cobertura_cmo["completo"]:
+        raise SanityCheckError(f"CMO incompleto ({cobertura_cmo}) — não dá para comparar custo entre modelos.")
+    cmo_horario = carregar_cmo_horario_se(cobertura_cmo["anos_presentes"])
+
+    print("=== Recalculando naive semanal (régua) a partir do histórico (determinístico, sem parquet) ===")
+    _, resultado_naive, _ = _avaliacao_naive_periodo_completo()
+    custo_naive = calcular_custo(resultado_naive["avaliacao"], cmo_horario)
+    resultados = {
+        "naive semanal": {
+            "mape": resultado_naive["mape"], "mase_sazonal": resultado_naive["mase_sazonal"],
+            "custo_total": custo_naive["custo_total"], "cobertura_80": None, "cobertura_90": None,
+        }
+    }
+
+    print("=== Carregando SARIMA de data/processed/sarima_previsoes_60d.parquet ===")
+    resultados["SARIMA"] = _carregar_resultado_modelo(
+        "SARIMA", PROCESSED_DIR / "sarima_previsoes_60d.parquet", df, mae1, mae_saz, cmo_horario)
+
+    print("=== Carregando Prophet de data/processed/prophet_previsoes.parquet ===")
+    resultados["Prophet"] = _carregar_resultado_modelo(
+        "Prophet", PROCESSED_DIR / "prophet_previsoes.parquet", df, mae1, mae_saz, cmo_horario)
+
+    print("=== Carregando Chronos-2 de data/processed/chronos_previsoes.parquet ===")
+    resultados["Chronos-2"] = _carregar_resultado_modelo(
+        "Chronos-2", PROCESSED_DIR / "chronos_previsoes.parquet", df, mae1, mae_saz, cmo_horario)
+
+    print("\n=== Conferindo os 4 modelos contra os números já comprometidos (ESCOPO.md/FACTS.md) ===")
+    for nome, obtido in resultados.items():
+        _conferir(nome, obtido, ALVOS_COMPROMETIDOS[nome])
+    print("Confirmado: os 4 modelos batem com os números já documentados. Reprodutibilidade OK.\n")
+
+    return resultados
+
+
+def fig_comparativo_4_modelos(resultados: dict):
+    ordem = ["naive semanal", "SARIMA", "Prophet", "Chronos-2"]
+    cores = {"naive semanal": COR_NAIVE, "SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+
+    mases = [resultados[n]["mase_sazonal"] for n in ordem]
+    axes[0].bar(ordem, mases, color=[cores[n] for n in ordem])
+    for i, v in enumerate(mases):
+        axes[0].text(i, v, f"{v:.4f}", ha="center", va="bottom", fontsize=9)
+    axes[0].axhline(1.0, color="#444444", linewidth=0.8, linestyle=":")
+    axes[0].set_title("MASE (denom. sazonal, lag=168h)\nmenor é melhor")
+    axes[0].set_ylabel("MASE (sazonal)")
+    axes[0].grid(alpha=0.25, axis="y")
+    axes[0].tick_params(axis="x", rotation=15)
+
+    custos_bi = [resultados[n]["custo_total"] / 1e9 for n in ordem]
+    axes[1].bar(ordem, custos_bi, color=[cores[n] for n in ordem])
+    for i, v in enumerate(custos_bi):
+        axes[1].text(i, v, f"R$ {v:.2f}bi", ha="center", va="bottom", fontsize=9)
+    axes[1].set_title("Custo total do erro de previsão\n(|erro| x CMO horário), menor é melhor")
+    axes[1].set_ylabel("Custo total (R$ bilhões)")
+    axes[1].grid(alpha=0.25, axis="y")
+    axes[1].tick_params(axis="x", rotation=15)
+
+    fig.suptitle(f"SE/CO — Comparativo dos 4 modelos, período de avaliação {INICIO_AVALIACAO.date()}+", fontsize=12)
+    _finalizar(fig, "resultado_5_comparativo_4_modelos.png")
+
+
+def fig_erro_vs_custo(resultados: dict):
+    ordem = ["naive semanal", "SARIMA", "Prophet", "Chronos-2"]
+    cores = {"naive semanal": COR_NAIVE, "SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
+
+    ranking_mase = sorted(ordem, key=lambda n: resultados[n]["mase_sazonal"])
+    ranking_custo = sorted(ordem, key=lambda n: resultados[n]["custo_total"])
+    print(f"Ranking por MASE (melhor->pior): {ranking_mase}")
+    print(f"Ranking por custo (melhor->pior): {ranking_custo}")
+    print(f"Rankings coincidem: {'sim' if ranking_mase == ranking_custo else 'não'}")
+
+    pos_mase = {n: i for i, n in enumerate(ranking_mase)}
+    pos_custo = {n: i for i, n in enumerate(ranking_custo)}
+
+    fig, ax = plt.subplots(figsize=(8, 6.5))
+    for n in ordem:
+        ax.plot([0, 1], [pos_mase[n], pos_custo[n]], color=cores[n], linewidth=2, marker="o", markersize=9,
+                 label=n, zorder=3)
+
+    n_modelos = len(ordem)
+    ax.set_xlim(-0.15, 1.15)
+    ax.set_ylim(n_modelos - 0.5, -0.5)
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["Ranking por MASE\n(sazonal)", "Ranking por custo\ntotal"])
+    ax.set_yticks(range(n_modelos))
+    ax.set_yticklabels([f"{i+1}º" for i in range(n_modelos)])
+    ax.set_ylabel("Posição no ranking (1º = melhor)")
+    ax.grid(alpha=0.2, axis="y")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=4, fontsize=9)
+
+    divergem = ranking_mase != ranking_custo
+    ax.set_title(
+        "SE/CO — Ranking por erro estatístico (MASE) vs. por custo de despacho (CMO)\n"
+        + ("rankings DIVERGEM entre si — erro agregado não prevê custo de despacho"
+           if divergem else "rankings coincidem")
+    )
+    _finalizar(fig, "resultado_6_erro_vs_custo.png")
+
+
+def fig_calibracao(resultados: dict):
+    modelos = ["SARIMA", "Prophet", "Chronos-2"]  # naive não tem quantis (previsão pontual sem incerteza)
+    cores = {"SARIMA": COR_SARIMA, "Prophet": COR_PROPHET, "Chronos-2": COR_CHRONOS}
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.plot([70, 100], [70, 100], color="#999999", linewidth=1, linestyle=":", label="Calibração perfeita", zorder=1)
+
+    for nome in modelos:
+        r = resultados[nome]
+        nominais, empiricas = [80], [r["cobertura_80"] * 100]
+        if r["cobertura_90"] is not None:
+            nominais.append(90)
+            empiricas.append(r["cobertura_90"] * 100)
+        ax.plot(nominais, empiricas, color=cores[nome], linewidth=2, marker="o", markersize=10,
+                 label=nome, zorder=3)
+        for x, y in zip(nominais, empiricas):
+            ax.annotate(f"{y:.1f}%", (x, y), textcoords="offset points", xytext=(6, 4), fontsize=8, color=cores[nome])
+
+    ax.set_xlim(70, 100)
+    ax.set_ylim(min(50, ax.get_ylim()[0]), 100)
+    ax.set_xlabel("Cobertura nominal (%) — P10-P90 = 80%, P05-P95 = 90%")
+    ax.set_ylabel("Cobertura empírica (%) — fração de horas com real dentro da banda")
+    ax.set_title(f"SE/CO — Calibração dos intervalos de incerteza\nperíodo de avaliação {INICIO_AVALIACAO.date()}+")
+    ax.legend(loc="lower right")
+    ax.grid(alpha=0.25)
+    _finalizar(fig, "resultado_7_calibracao.png")
+
+
 def main():
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -271,20 +487,15 @@ def main():
     fig_efeito_temperatura()
     fig_quebras_estruturais()
 
-    print(
-        "\nNÃO GERADOS — bloqueados por falta de dado salvo:\n"
-        "  - Comparação de 4 modelos (naive/SARIMA/Prophet/Chronos) em MASE e custo\n"
-        "  - Divergência de ranking erro x custo\n"
-        "  - Calibração (cobertura empírica vs. nominal) para Prophet e para o Chronos-2 principal\n"
-        "  Motivo: as previsões principais de Prophet (ctx=2 anos, 2024-01-01+, commit f87138a) e do\n"
-        "  Chronos-2 zero-shot (melhor config, 2024-01-01+, commit 59b8dc4) nunca foram salvas em\n"
-        "  data/processed/ — os dois scripts (src/modelo_prophet.py, src/modelo_chronos2.py) só\n"
-        "  imprimem o resultado em stdout, não persistem parquet. Único arquivo de Prophet salvo é\n"
-        "  prophet_ctx_controlado_sem_temp.parquet, período 2024-01-20+, gerado por um script separado\n"
-        "  (não coberto por src/, rodando em paralelo neste momento) para a comparação de temperatura —\n"
-        "  não é o Prophet principal e não tem período comparável ao SARIMA/naive."
-    )
+    resultados = _coletar_resultados_4_modelos()
+    fig_comparativo_4_modelos(resultados)
+    fig_erro_vs_custo(resultados)
+    fig_calibracao(resultados)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SanityCheckError as e:
+        print(f"\nSANITY CHECK FALHOU — ABORTADO: {e}", file=sys.stderr)
+        sys.exit(1)
