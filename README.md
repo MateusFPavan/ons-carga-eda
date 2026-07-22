@@ -75,7 +75,7 @@ The cost metric is a declared model, not realized dispatch cost, and depends on 
 
 ## License & contact
 
-`[TODO: add license — repo is currently public without one, which technically means no reuse rights.]`
+MIT License — see [LICENSE](LICENSE).
 
 **Mateus Fardin Pavan** · [mateusfardinpavan@gmail.com](mailto:mateusfardinpavan@gmail.com) · [LinkedIn](https://www.linkedin.com/in/mateus-fardin-pavan) · [GitHub](https://github.com/MateusFPavan)
 
@@ -85,4 +85,4 @@ The cost metric is a declared model, not realized dispatch cost, and depends on 
 
 Present: outcome-oriented title, problem statement, hero visual, key results with headline number, run instructions with pinned deps and relative paths, repo structure.
 
-**Missing / flagged `[TODO]`:** **license** (must-have — the repo is public with no license). No result numbers were invented.
+No result numbers were invented.

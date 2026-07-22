@@ -30,7 +30,7 @@ The chosen model is **Chronos-2 (120M), applied zero-shot** to forecast day-ahea
 - **Model size / checkpoint:** `amazon/chronos-2` (~120M parameters). A smaller `chronos-2-small` (~28M) was also evaluated.
 - **Version / date:** `chronos-forecasting==2.3.1`; evaluated July 2026.
 - **Authors:** model by Amazon Science; this evaluation and integration by Mateus Fardin Pavan — mateusfardinpavan@gmail.com · [GitHub](https://github.com/MateusFPavan).
-- **License:** Chronos-2 under Apache-2.0 (base model). This card and the study code `[TODO: confirm repo license]`.
+- **License:** Chronos-2 under Apache-2.0 (base model). This card and the study code: MIT (this study's code and documentation).
 - **Base model / links:** `amazon/chronos-2` on Hugging Face; `[TODO: add paper/repo URLs]`.
 - **Runs on CPU** — no GPU required.
 
@@ -142,4 +142,4 @@ Chronos-2 cuts MASE to ~1/3 of the naïve and dispatch cost by ~65%. Its 90% int
 
 All present: **model summary** (§1), **model details incl. architecture/version/license** (§2), **intended + out-of-scope uses** (§3–§4), **training-data reference** (§6 → `docs/DATA_CARD.md`), **procedure with key config** (§7, adapted honestly for a zero-shot model — inference config, not training hyperparameters), **evaluation naming metric + temporal split + baseline + disaggregation** (§8), **bias/risks/limitations** (§9).
 
-`[TODO]` items flagged inline (not invented): repo license, paper URLs, weekday/season disaggregation, holiday-error quantification, compute footprint, citation.
+`[TODO]` items flagged inline (not invented): paper URLs, weekday/season disaggregation, holiday-error quantification, compute footprint, citation.

@@ -57,7 +57,7 @@ The primary reader is a **data-science recruiter or hiring technical lead**, rev
 | 8 | `references/one_pager.md` fits one page and leads with impact | ✅ Met |
 | 9 | Narrated notebook readable without running | ✅ Met |
 | 10 | Deps pinned; no secrets; relative paths only | ✅ Met |
-| 11 | Repository has a LICENSE | ❌ Not met — `[TODO]` |
+| 11 | Repository has a LICENSE | ✅ Met (MIT) |
 | 12 | Author identity and contact present | ✅ Met |
 | 13 | Linter config and/or declared testing strategy | ❌ Not met — `[TODO]` |
 
@@ -73,4 +73,4 @@ Start at `README.md` (30 s), then `references/one_pager.md` if you want the busi
 
 ### Final self-check — MUST-HAVE items
 
-All present: **scope/objective** (§1), **functional requirements** (§3), **measurable quality requirements** (§4), **weighted rubric with thresholds** (§5), **acceptance checklist with self-assessment** (§6), **out-of-scope** (§7). Known gaps are marked `❌`/`[TODO]` rather than omitted: license, linter/testing strategy.
+All present: **scope/objective** (§1), **functional requirements** (§3), **measurable quality requirements** (§4), **weighted rubric with thresholds** (§5), **acceptance checklist with self-assessment** (§6), **out-of-scope** (§7). Known gaps are marked `❌`/`[TODO]` rather than omitted: linter/testing strategy.
