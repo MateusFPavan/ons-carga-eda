@@ -29,7 +29,7 @@ CHECKPOINTS = {
     "chronos2_small_28M": "autogluon/chronos-2-small",
 }
 CONTEXTOS_HORAS = [96, 256, 512, 1024, 2048]
-QUANTIS = [0.1, 0.5, 0.9]
+QUANTIS = [0.05, 0.1, 0.5, 0.9, 0.95]  # P05/P95 adicionados para cobertura a 90% nominal ser reproduzível
 
 # Config vencedora do sweep original (tabela comparativa já comprometida em
 # FACTS.md/reports): reproduzida aqui sozinha (não o sweep de 10 combinações) e
@@ -42,22 +42,28 @@ ALVO_CUSTO_TOTAL = 3_006_870_034.31
 TOLERANCIA_PP = 0.001
 TOLERANCIA_REL_CUSTO = 0.001
 
+# Cobertura a 90% nominal (P05-P95) calculada no commit 7ce4493 mas nunca
+# persistida — citada em 5 documentos (SETUP/technical_report/MODEL_CARD/
+# README/one_pager) como 88.9%, sem lastro reprodutível até esta rodada.
+ALVO_COBERTURA_90 = 88.9
+TOLERANCIA_PP_COBERTURA = 1.0  # pontos percentuais — "divergir materialmente"
+
 
 def previsor_chronos2(pipeline, contexto_horas: int, cache_quantis: dict):
     """Fábrica de previsor compatível com rodar_walkforward (devolve só a
     mediana — mesmo contrato do naive, reusado sem alteração). Como efeito
-    colateral, grava P10/mediana/P90 em cache_quantis[origem]: uma chamada ao
-    modelo já devolve todos os quantis, então a calibração não custa nenhuma
-    inferência extra."""
+    colateral, grava P05/P10/mediana/P90/P95 em cache_quantis[origem]: uma
+    chamada ao modelo já devolve todos os quantis, então a calibração (80% E
+    90% nominal) não custa nenhuma inferência extra."""
     def prever(historico: pd.Series, origem: pd.Timestamp) -> pd.Series:
         contexto = historico.iloc[-contexto_horas:].to_numpy(dtype="float32")
         horas_alvo = pd.date_range(origem, periods=24, freq="h")
         quantis, _ = pipeline.predict_quantiles(
             inputs=[{"target": contexto}], prediction_length=24, quantile_levels=QUANTIS,
         )
-        arr = np.asarray(quantis[0][0])  # (24, 3): p10, mediana, p90
-        p10, mediana, p90 = arr[:, 0], arr[:, 1], arr[:, 2]
-        cache_quantis[origem] = {"p10": p10, "mediana": mediana, "p90": p90}
+        arr = np.asarray(quantis[0][0])  # (24, 5): p05, p10, mediana, p90, p95 — mesma ordem de QUANTIS
+        p05, p10, mediana, p90, p95 = arr[:, 0], arr[:, 1], arr[:, 2], arr[:, 3], arr[:, 4]
+        cache_quantis[origem] = {"p05": p05, "p10": p10, "mediana": mediana, "p90": p90, "p95": p95}
         return pd.Series(mediana, index=horas_alvo)
     return prever
 
@@ -66,16 +72,21 @@ def montar_calibracao(cache_quantis: dict) -> pd.DataFrame:
     linhas = []
     for origem, d in cache_quantis.items():
         horas = pd.date_range(origem, periods=24, freq="h")
-        for h, p10, p90 in zip(horas, d["p10"], d["p90"]):
-            linhas.append({"din_instante": h, "p10": p10, "p90": p90})
+        for h, p05, p10, p90, p95 in zip(horas, d["p05"], d["p10"], d["p90"], d["p95"]):
+            linhas.append({"din_instante": h, "p05": p05, "p10": p10, "p90": p90, "p95": p95})
     return pd.DataFrame(linhas)
 
 
 def calcular_cobertura(avaliacao: pd.DataFrame, calibracao: pd.DataFrame) -> dict:
     incluida = avaliacao[avaliacao["motivo_exclusao"] == "incluida"].copy()
     m = incluida.merge(calibracao, on="din_instante", how="left", validate="one_to_one")
-    dentro = (m["real"] >= m["p10"]) & (m["real"] <= m["p90"])
-    return {"n_avaliado": len(m), "cobertura_p10_p90": float(dentro.mean())}
+    dentro_80 = (m["real"] >= m["p10"]) & (m["real"] <= m["p90"])
+    dentro_90 = (m["real"] >= m["p05"]) & (m["real"] <= m["p95"])
+    return {
+        "n_avaliado": len(m),
+        "cobertura_p10_p90": float(dentro_80.mean()),
+        "cobertura_p05_p95": float(dentro_90.mean()),
+    }
 
 
 def verificar_contextos_sem_nan(df: pd.DataFrame, inicio_avaliacao: pd.Timestamp, contexto_max_horas: int) -> int:
@@ -302,7 +313,8 @@ def salvar_previsoes_principais():
 
     print(f"\nMAPE={resultado['mape']:.4f}% RMSE={resultado['rmse']:.2f} "
           f"MASE(1passo)={resultado['mase_naive1']:.4f} MASE(sazonal)={resultado['mase_sazonal']:.4f} "
-          f"cobertura_P10-P90={cobertura['cobertura_p10_p90']*100:.2f}% "
+          f"cobertura_P10-P90(80%nom)={cobertura['cobertura_p10_p90']*100:.2f}% "
+          f"cobertura_P05-P95(90%nom)={cobertura['cobertura_p05_p95']*100:.2f}% "
           f"custo_total={'R$ %.2f' % custo['custo_total'] if custo else 'N/D'}")
 
     print(f"\nTestando vazamento: {N_AMOSTRAS_VAZAMENTO} origens aleatórias (seed={SEED_VAZAMENTO})...")
@@ -320,27 +332,39 @@ def salvar_previsoes_principais():
     mape_ok = abs(resultado["mape"] - ALVO_MAPE) < TOLERANCIA_PP
     custo_ok = (custo is not None and
                 abs(custo["custo_total"] - ALVO_CUSTO_TOTAL) / ALVO_CUSTO_TOTAL < TOLERANCIA_REL_CUSTO)
+    cobertura_90_pct = cobertura["cobertura_p05_p95"] * 100
+    cobertura90_ok = abs(cobertura_90_pct - ALVO_COBERTURA_90) < TOLERANCIA_PP_COBERTURA
     print(f"  MASE(sazonal): obtido={resultado['mase_sazonal']:.4f} alvo={ALVO_MASE_SAZONAL} -> "
           f"{'OK' if mase_ok else 'DIVERGIU'}")
     print(f"  MAPE: obtido={resultado['mape']:.4f}% alvo={ALVO_MAPE}% -> {'OK' if mape_ok else 'DIVERGIU'}")
     if custo is not None:
         print(f"  Custo total: obtido=R$ {custo['custo_total']:,.2f} alvo=R$ {ALVO_CUSTO_TOTAL:,.2f} -> "
               f"{'OK' if custo_ok else 'DIVERGIU'}")
+    print(f"  Cobertura P05-P95 (90% nominal): obtido={cobertura_90_pct:.2f}% alvo~{ALVO_COBERTURA_90}% "
+          f"(citado em 5 documentos, commit 7ce4493, nunca antes reproduzível) -> "
+          f"{'OK' if cobertura90_ok else 'DIVERGIU'}")
     if not (mase_ok and mape_ok and custo_ok):
         raise SanityCheckError(
             "Números do Chronos-2 divergem da tabela original comprometida (FACTS.md) — seria furo de "
             "reprodutibilidade que precisamos entender antes de documentar. PARANDO."
         )
-    print("Confirmado: bate com os números já documentados. Reprodutibilidade OK.")
+    if not cobertura90_ok:
+        raise SanityCheckError(
+            f"Cobertura P05-P95 recomputada ({cobertura_90_pct:.2f}%) diverge materialmente dos ~88.9% "
+            "citados em SETUP.md/technical_report.md/MODEL_CARD.md/README.md/one_pager.md (commit 7ce4493) "
+            "— os documentos precisariam ser corrigidos, não este número. PARANDO para reportar."
+        )
+    print("Confirmado: bate com os números já documentados, incluindo a cobertura de 90% agora "
+          "reproduzível. Reprodutibilidade OK.")
 
     export = previsto.merge(calibracao, on="din_instante", how="left", validate="one_to_one")
     export["origem"] = export["din_instante"].dt.normalize()
     export["modelo"] = ALVO_MODELO
     export["contexto_h"] = ALVO_CONTEXTO_H
-    export = export[["origem", "din_instante", "previsto", "p10", "p90", "modelo", "contexto_h"]]
+    export = export[["origem", "din_instante", "previsto", "p05", "p10", "p90", "p95", "modelo", "contexto_h"]]
     out_path = PROCESSED_DIR / "chronos_previsoes.parquet"
     export.to_parquet(out_path, index=False)
-    print(f"\nPrevisões principais salvas em {out_path} ({len(export)} linhas).")
+    print(f"\nPrevisões principais salvas em {out_path} ({len(export)} linhas, colunas: {list(export.columns)}).")
 
 
 if __name__ == "__main__":
