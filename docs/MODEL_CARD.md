@@ -52,21 +52,39 @@ The chosen model is **Chronos-2 (120M), applied zero-shot** to forecast day-ahea
 
 ## 5. How to use
 
-```python
-import pandas as pd
-from chronos import Chronos2Pipeline   # chronos-forecasting==2.3.1
+Actual call signature, `src/modelo_chronos2.py` (winning config — no covariates):
 
-pipe = Chronos2Pipeline.from_pretrained("amazon/chronos-2")
-# context: hourly load up to the end of day D-1 (local time), e.g. last 2048 hours
-context = load_series.values[-2048:]
-q = pipe.predict_quantiles(
-    inputs=[{"target": context}],
+```python
+import numpy as np
+from chronos import BaseChronosPipeline   # chronos-forecasting==2.3.1
+
+pipeline = BaseChronosPipeline.from_pretrained("amazon/chronos-2", device_map="cpu")
+# context: hourly load up to the end of day D-1 (local time), last 2048 hours, float32
+contexto = historico.iloc[-2048:].to_numpy(dtype="float32")
+quantis, _ = pipeline.predict_quantiles(
+    inputs=[{"target": contexto}],
     prediction_length=24,
-    quantile_levels=[0.1, 0.5, 0.9],
+    quantile_levels=[0.05, 0.1, 0.5, 0.9, 0.95],
 )
-# q -> P10/P50/P90 for the next 24 hours (day-ahead)
+arr = np.asarray(quantis[0][0])  # shape (24, 5): P05/P10/P50/P90/P95, same order as quantile_levels
+p05, p10, mediana, p90, p95 = arr[:, 0], arr[:, 1], arr[:, 2], arr[:, 3], arr[:, 4]
 ```
-`[TODO: confirm the exact call signature against src/modelo_chronos2.py, incl. how covariates (temperature) are passed via future_covariates.]`
+
+Optional temperature-covariate layer (context-controlled ablation, `src/chronos_contexto_controlado.py`) — covariates are passed as `past_covariates`/`future_covariates` dicts of same-length arrays, keyed by name:
+
+```python
+past_cov = {"dst_ativo": dst_ativo_historico}
+future_cov = {"dst_ativo": dst_ativo_horas_alvo}
+for cidade in ["Sao_Paulo", "Rio_de_Janeiro", "Belo_Horizonte", "Brasilia", "Goiania"]:
+    past_cov[f"temp_{cidade}"] = temp_historico[cidade]      # known past temperature (or forecast, leakage-safe)
+    future_cov[f"temp_{cidade}"] = temp_horas_alvo[cidade]   # day-ahead forecast temperature for the 24h target
+
+quantis, _ = pipeline.predict_quantiles(
+    inputs=[{"target": target, "past_covariates": past_cov, "future_covariates": future_cov}],
+    prediction_length=24,
+    quantile_levels=[0.05, 0.1, 0.5, 0.9, 0.95],
+)
+```
 
 ## 6. Training data
 
@@ -124,4 +142,4 @@ Chronos-2 cuts MASE to ~1/3 of the naïve and dispatch cost by ~65%. Its 90% int
 
 All present: **model summary** (§1), **model details incl. architecture/version/license** (§2), **intended + out-of-scope uses** (§3–§4), **training-data reference** (§6 → `docs/DATA_CARD.md`), **procedure with key config** (§7, adapted honestly for a zero-shot model — inference config, not training hyperparameters), **evaluation naming metric + temporal split + baseline + disaggregation** (§8), **bias/risks/limitations** (§9).
 
-`[TODO]` items flagged inline (not invented): repo license, paper URLs, exact call signature, weekday/season disaggregation, holiday-error quantification, compute footprint, citation.
+`[TODO]` items flagged inline (not invented): repo license, paper URLs, weekday/season disaggregation, holiday-error quantification, compute footprint, citation.

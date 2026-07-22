@@ -5,7 +5,6 @@ Day-ahead hourly load forecasting for Brazil's largest grid region — where a z
 ![Forecast vs actual on the held-out test split](reports/figures/resultado_1_heroi_chronos_semana_2025.png)
 
 *Chronos-2 day-ahead forecast vs. actual load, test week (May 2025), with the P10–P90 uncertainty band.*
-`[TODO: if you prefer the path reports/figures/hero.png as in the spec, copy or rename this file.]`
 
 ## The problem
 
@@ -86,4 +85,4 @@ The cost metric is a declared model, not realized dispatch cost, and depends on 
 
 Present: outcome-oriented title, problem statement, hero visual, key results with headline number, run instructions with pinned deps and relative paths, repo structure.
 
-**Missing / flagged `[TODO]`:** **license** (must-have — the repo is public with no license); and the hero-image filename decision (`hero.png` vs. the descriptive name currently generated). No result numbers were invented.
+**Missing / flagged `[TODO]`:** **license** (must-have — the repo is public with no license). No result numbers were invented.

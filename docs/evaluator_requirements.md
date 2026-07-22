@@ -47,7 +47,7 @@ The primary reader is a **data-science recruiter or hiring technical lead**, rev
 
 | # | Item | Self-assessment |
 |---|---|---|
-| 1 | README states outcome in the title, shows a hero forecast-vs-actual visual, and gives a run command | ⚠️ Partial — hero filename alignment `[TODO]` |
+| 1 | README states outcome in the title, shows a hero forecast-vs-actual visual, and gives a run command | ✅ Met |
 | 2 | Repo runs top-to-bottom via `python run_all.py` (~1 min) | ✅ Met |
 | 3 | Evaluation reports the metric on a held-out **temporal** split with baseline comparison | ✅ Met |
 | 4 | Leakage tests present, reporting 0 divergences | ✅ Met |
@@ -55,7 +55,7 @@ The primary reader is a **data-science recruiter or hiring technical lead**, rev
 | 6 | `SETUP` gives pinned install + exact reproduce command | ✅ Met |
 | 7 | `technical_report` leads with an executive summary and states limitations | ✅ Met |
 | 8 | `references/one_pager.md` fits one page and leads with impact | ✅ Met |
-| 9 | Narrated notebook readable without running | ⚠️ Partial — column-wiring `[TODO]`s remain |
+| 9 | Narrated notebook readable without running | ✅ Met |
 | 10 | Deps pinned; no secrets; relative paths only | ✅ Met |
 | 11 | Repository has a LICENSE | ❌ Not met — `[TODO]` |
 | 12 | Author identity and contact present | ✅ Met |
@@ -73,4 +73,4 @@ Start at `README.md` (30 s), then `references/one_pager.md` if you want the busi
 
 ### Final self-check — MUST-HAVE items
 
-All present: **scope/objective** (§1), **functional requirements** (§3), **measurable quality requirements** (§4), **weighted rubric with thresholds** (§5), **acceptance checklist with self-assessment** (§6), **out-of-scope** (§7). Known gaps are marked `❌`/`[TODO]` rather than omitted: license, linter/testing strategy, hero-image filename, notebook column wiring.
+All present: **scope/objective** (§1), **functional requirements** (§3), **measurable quality requirements** (§4), **weighted rubric with thresholds** (§5), **acceptance checklist with self-assessment** (§6), **out-of-scope** (§7). Known gaps are marked `❌`/`[TODO]` rather than omitted: license, linter/testing strategy.

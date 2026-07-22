@@ -76,14 +76,14 @@ python run_all.py --help              # lists every stage with its cost
 
 Headline metrics on the held-out temporal test period (2024-01-01+), `seed=42`, single run (deterministic — one run suffices):
 
-| Model | MASE (seasonal) | MAPE | Dispatch cost |
-|---|---|---|---|
-| Seasonal-naive (weekly) | 1.2732 | 5.37% | R$ 8.52 bi |
-| SARIMA | 1.3412 | 5.68% | R$ 8.40 bi |
-| Prophet | 1.1669 | 5.00% | R$ 7.86 bi |
-| Chronos-2 (120M, 2048h) | **0.4363** | **1.82%** | **R$ 3.01 bi** |
+| Model | MASE (seasonal) | MAPE | Dispatch cost | Coverage @90% |
+|---|---|---|---|---|
+| Seasonal-naive (weekly) | 1.2732 | 5.37% | R$ 8.52 bi | — |
+| SARIMA | 1.3412 | 5.68% | R$ 8.40 bi | 92.5% |
+| Prophet | 1.1669 | 5.00% | R$ 7.86 bi | 86.2% |
+| Chronos-2 (120M, 2048h) | **0.4363** | **1.82%** | **R$ 3.01 bi** | 88.9% |
 
-A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** exactly; Prophet reproduces MASE ~1.167. Leakage self-tests return **0 divergences**. If your numbers differ, stop — it signals a broken split or nondeterminism.
+A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** / P05–P95 coverage **88.93%** exactly; Prophet reproduces MASE ~1.167. Leakage self-tests return **0 divergences**. If your numbers differ, stop — it signals a broken split or nondeterminism.
 
 ## 7. Runtime & resources
 
