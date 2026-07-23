@@ -158,7 +158,7 @@ def main():
     n_total_origens = len(conv_df)
     n_nao_convergiu = int((~conv_df["convergiu"]).sum())
     pct_nao_convergiu = n_nao_convergiu / n_total_origens * 100
-    print(f"\n=== CONVERGÊNCIA DO MLE ===")
+    print("\n=== CONVERGÊNCIA DO MLE ===")
     print(f"Origens que NÃO convergiram: {n_nao_convergiu}/{n_total_origens} ({pct_nao_convergiu:.2f}%)")
 
     avaliacao = resultado["avaliacao"].copy()

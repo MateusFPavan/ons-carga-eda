@@ -101,8 +101,8 @@ def tarefa2_chronos_covariaveis():
     arr = np.asarray(quantis[0][0])
     mediana = arr[:, 1]
     n_nan_saida = int(np.isnan(mediana).sum())
-    print(f"predict_quantiles(inputs=[{{'target':..., 'past_covariates':..., 'future_covariates':...}}]) — "
-          f"assinatura usada, 1 alvo + 6 covariáveis (dst_ativo + 5 temperaturas)")
+    print("predict_quantiles(inputs=[{'target':..., 'past_covariates':..., 'future_covariates':...}]) — "
+          "assinatura usada, 1 alvo + 6 covariáveis (dst_ativo + 5 temperaturas)")
     print(f"Tempo de inferência: {t_inferencia:.4f}s | N previsões: {len(mediana)} | NaN na saída: {n_nan_saida}")
     print(f"Mediana min/max/média: {mediana.min():.2f} / {mediana.max():.2f} / {mediana.mean():.2f} MWh/h")
     print(f"Extrapolação 927 origens: {t_inferencia*927/60:.1f} min")

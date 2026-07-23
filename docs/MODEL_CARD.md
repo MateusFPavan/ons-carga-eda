@@ -31,7 +31,7 @@ The chosen model is **Chronos-2 (120M), applied zero-shot** to forecast day-ahea
 - **Version / date:** `chronos-forecasting==2.3.1`; evaluated July 2026.
 - **Authors:** model by Amazon Science; this evaluation and integration by Mateus Fardin Pavan — mateusfardinpavan@gmail.com · [GitHub](https://github.com/MateusFPavan).
 - **License:** Chronos-2 under Apache-2.0 (base model). This card and the study code: MIT (this study's code and documentation).
-- **Base model / links:** `amazon/chronos-2` on Hugging Face; `[TODO: add paper/repo URLs]`.
+- **Base model / links:** [`amazon/chronos-2` on Hugging Face](https://huggingface.co/amazon/chronos-2); paper: "Chronos-2: From Univariate to Universal Forecasting," [arXiv:2510.15821](https://arxiv.org/abs/2510.15821) (Amazon Science, Oct 2025); repo: [amazon-science/chronos-forecasting](https://github.com/amazon-science/chronos-forecasting).
 - **Runs on CPU** — no GPU required.
 
 ## 3. Intended uses
@@ -134,7 +134,7 @@ Chronos-2 cuts MASE to ~1/3 of the naïve and dispatch cost by ~65%. Its 90% int
 ## 10. Compute & citation
 
 - **Compute:** CPU-only. Chronos-2 inference over the full walk-forward: ~10 min. `[TODO: energy/CO₂ footprint not measured.]`
-- **Citation:** `[TODO: add Chronos-2 paper citation and this project's citation/DOI if any.]`
+- **Citation:** Amazon Science, "Chronos-2: From Univariate to Universal Forecasting," arXiv:2510.15821, Oct 2025. This project itself has no DOI (personal portfolio project, not published) — cite the [GitHub repository](https://github.com/MateusFPavan/ons-carga-eda) directly if needed.
 
 ---
 
@@ -142,4 +142,4 @@ Chronos-2 cuts MASE to ~1/3 of the naïve and dispatch cost by ~65%. Its 90% int
 
 All present: **model summary** (§1), **model details incl. architecture/version/license** (§2), **intended + out-of-scope uses** (§3–§4), **training-data reference** (§6 → `docs/DATA_CARD.md`), **procedure with key config** (§7, adapted honestly for a zero-shot model — inference config, not training hyperparameters), **evaluation naming metric + temporal split + baseline + disaggregation** (§8), **bias/risks/limitations** (§9).
 
-`[TODO]` items flagged inline (not invented): paper URLs, weekday/season disaggregation, holiday-error quantification, compute footprint, citation.
+`[TODO]` items flagged inline (not invented): weekday/season disaggregation, holiday-error quantification, compute footprint.

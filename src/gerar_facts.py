@@ -11,7 +11,7 @@ geração, sem qualquer elemento não-determinístico).
 import hashlib
 import json
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -985,7 +985,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     W("")
     W("Gerados por código: varredura hora a hora de 2015-01-01 a 2019-12-31 usando")
     W("`zoneinfo(\"America/Sao_Paulo\")` (IANA tzdata) e `datetime.fold`, sem nenhuma data")
-    W(f"hardcoded. Total de timestamps classificados como ambíguos ou inexistentes no")
+    W("hardcoded. Total de timestamps classificados como ambíguos ou inexistentes no")
     W(f"período: **{d['n_total']}** ({d['n_inexistentes']} inexistentes + {d['n_ambiguos']} ambíguos).")
     W("")
     W("### Início de DST (timestamp local inexistente)")
@@ -1021,7 +1021,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
             W(f"| {oc['id_subsistema']} | {oc['din_instante']} | `{oc['val_raw_str']}` |")
     else:
         W("- nenhuma ocorrência encontrada (DIVERGE do esperado — ver aviso no topo do relatório)")
-    W(f"")
+    W("")
     W(f"Total de ocorrências de notação científica na coluna inteira (2015-2024): {len(d['ocorrencias_notacao_cientifica'])}.")
     W("")
     W("---")
@@ -1181,9 +1181,9 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
         W("")
         W("### J2. Fato bruto vs. regra derivada — CMO Semi-Horário, amostra 2024")
         W("")
-        W(f"**Fato bruto — granularidade nativa:** diferença entre timestamps distintos")
+        W("**Fato bruto — granularidade nativa:** diferença entre timestamps distintos")
         W(f"consecutivos é de {fmt_int(int(j['diff_modal_segundos']))} segundos ({int(j['diff_modal_segundos']//60)} minutos)")
-        W(f"na quase totalidade dos casos. Valores de diferença distintos observados no")
+        W("na quase totalidade dos casos. Valores de diferença distintos observados no")
         W(f"arquivo inteiro: {', '.join(fmt_int(int(x)) for x in j['diffs_segundos_distintas'])} segundos.")
         W("")
         W(f"**Fato bruto — subsistemas observados:** `{'`, `'.join(j['ids_observados'])}` —")
@@ -1302,7 +1302,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
         W("")
         W("### K2. Efeito de CMO zero/negativo e concentração do custo")
         W("")
-        W(f"Valores semi-horários negativos no ano inteiro, **subsistema SE apenas**:")
+        W("Valores semi-horários negativos no ano inteiro, **subsistema SE apenas**:")
         W(f"{ez['n_semihoras_negativas_ano_inteiro']}. Não contradiz a seção J3 (77 negativos):")
         W("aquele número é a soma dos 4 subsistemas — os 77 negativos pertencem inteiramente")
         W("ao subsistema NE; SE não tem nenhum valor semi-horário negativo em 2024.")
@@ -1328,7 +1328,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
             W("")
         W("### K3. Fuso horário do CMO — fatos brutos e fato derivado")
         W("")
-        W(f"Dicionários de dados verificados (CMO Semi-Horário e Curva de Carga) presentes")
+        W("Dicionários de dados verificados (CMO Semi-Horário e Curva de Carga) presentes")
         W(f"em `data/raw/documentacao/`: {'sim' if fz['dicionarios_verificados_presentes'] else 'não'}.")
         W("Nenhum dos dois menciona fuso horário, UTC ou hora local em nenhum lugar do")
         W("texto (verificado por leitura integral do PDF — relatório 07, seções 1-2).")
@@ -1336,7 +1336,7 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
         W(f"Perfil intradiário do CMO (SE, 2024): pico às **{fz['hora_pico_cmo']}h** ({fmt_br(fz['valor_pico_cmo'], 4)} R$/MWh),")
         W(f"vale às **{fz['hora_vale_cmo']}h** ({fmt_br(fz['valor_vale_cmo'], 4)} R$/MWh).")
         W("")
-        W(f"Correlação entre o perfil horário do CMO e o perfil horário da carga SE/CO")
+        W("Correlação entre o perfil horário do CMO e o perfil horário da carga SE/CO")
         W(f"(2024, rótulos de hora como armazenados, sem deslocamento): **{fmt_br(fz['correlacao_lag_0'], 4)}**.")
         W(f"Correlação sob a hipótese \"CMO está em UTC, corrigir +3h\": **{fmt_br(fz['correlacao_lag_hipotese_utc_mais_3h'], 4)}**.")
         W("")

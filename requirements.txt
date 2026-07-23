@@ -32,3 +32,6 @@ torch==2.13.0
 transformers==5.14.1
 tzdata==2026.3
 urllib3==2.7.0
+
+# --- dev-only, não necessário para rodar o pipeline (só para lint) ---
+ruff==0.15.22

@@ -5,7 +5,6 @@ string + continuidade em UTC para SE/CO.
 Não corrige nada em data/raw/. Apenas lê e reporta.
 """
 import json
-import unicodedata
 from pathlib import Path
 from zoneinfo import ZoneInfo
 

@@ -70,7 +70,9 @@ python run_all.py --help              # lists every stage with its cost
 
 **Temporal split (critical):** the evaluation is **walk-forward, day-ahead, sliding origin, over 2024-01-01+ — never shuffled.** Each forecast uses only history prior to its origin. A reviewer who shuffles will not reproduce these boundaries and will leak the future.
 
-**Artefacts produced:** `reports/FACTS.md`; `reports/tabela_comparativa.csv`; cleaned/feature data in `data/processed/`; saved predictions (`chronos_previsoes.parquet`, `prophet_previsoes.parquet`, `sarima_previsoes_60d.parquet`, …); 7 charts in `reports/figures/`. `[TODO: serialize fitted-model objects into models/ — currently predictions are saved, not model objects.]`
+**Artefacts produced:** `reports/FACTS.md`; `reports/tabela_comparativa.csv`; cleaned/feature data in `data/processed/`; saved predictions (`chronos_previsoes.parquet`, `prophet_previsoes.parquet`, `sarima_previsoes_60d.parquet`, …); 7 charts in `reports/figures/`.
+
+**No `models/` directory with serialized fitted-model objects — deliberate, not a gap.** Chronos-2 is zero-shot: there is no trained model to serialize, only the pretrained checkpoint (`amazon/chronos-2`, pulled from Hugging Face). SARIMA and Prophet are each **re-fit per walk-forward origin** (one model per forecast day, ~900+ fits), so there is no single "the trained model" to save — a fitted `SARIMAXResults`/`Prophet` object is a snapshot of one origin's fit, not reusable for the next day's forecast. Saving the **predictions** (`data/processed/*_previsoes.parquet`) is the correct artefact for this walk-forward design; re-running `--stage models` regenerates them deterministically (`seed=42`, single-thread) if ever needed.
 
 ## 6. Expected results
 
@@ -96,6 +98,19 @@ A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** / P05–P9
 - **Hash mismatch in `run_all.py`:** a `data/raw/` file changed or ONS revised it; re-fetch and re-verify.
 - **Numbers drift from §6:** check the split is temporal (unshuffled) and the seed is set.
 
+## 9. Code quality (lint)
+
+[Ruff](https://docs.astral.sh/ruff/) is configured (`pyproject.toml`, pinned `ruff==0.15.22` in `requirements.txt`, dev-only — not required to run the pipeline). Two rule categories are intentionally disabled project-wide, not silenced case by case:
+
+- **`E501` (line too long):** many diagnostic prints and f-strings are deliberately descriptive (sanity-check messages, tables); line length isn't a real risk in this codebase.
+- **`E402` (import not at top of file):** several model scripts set single-thread environment variables (`OMP_NUM_THREADS` etc.) *before* importing `numpy`/`pandas`/`prophet` — required for Prophet's Stan optimizer to be deterministic (§4). Moving those imports to satisfy the linter would break the leakage self-test's determinism.
+
+```bash
+ruff check src/ run_all.py
+```
+
+Everything else (unused imports, undefined names, basic pycodestyle) is enforced. As of this writing, `src/` is clean except for 20 flagged-and-reviewed items (11 ambiguous single-letter loop variables named `l`, 9 unused local variables) — cosmetic or genuinely dead code, none affecting correctness; left for a future pass rather than a bulk rename/delete without review.
+
 ---
 
 ## Final self-check — MUST-HAVE items
@@ -105,5 +120,6 @@ A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** / P05–P9
 - **Exact reproduce commands, ordered:** `run_all.py` fully specified with staged modes (§5); default reproduces the result in ~1 min from saved predictions, `--stage models` retrains. No reproducibility `[TODO]` remains.
 - **Expected results & seeds/run count:** present (§6).
 - **Relative paths / no committed secrets:** present (§3, §4).
+- **Code quality:** ruff configured and run (§9).
 
-**Missing/unverified, flagged inline:** exact fetch-script name, interpreter patch version, `models/` serialization, peak RAM, non-Windows confirmation. None invented.
+**Missing/unverified, flagged inline:** exact fetch-script name, interpreter patch version, peak RAM, non-Windows confirmation. None invented.

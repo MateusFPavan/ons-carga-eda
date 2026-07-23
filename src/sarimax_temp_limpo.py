@@ -67,13 +67,13 @@ def main():
           f"apesar de convergiu=True")
 
     m = metricas(d2, mae1, mae_saz, cmo_horario)
-    print(f"\n=== SARIMAX+temp LIMPO (só convergentes + plausíveis) ===")
+    print("\n=== SARIMAX+temp LIMPO (só convergentes + plausíveis) ===")
     print(f"n={m['n']} horas | MAPE={m['mape']:.4f}% RMSE={m['rmse']:.2f} MAE={m['mae']:.2f} "
           f"MASE(1passo)={m['mase_naive1']:.4f} MASE(sazonal)={m['mase_sazonal']:.4f}")
     if "custo_total" in m:
         print(f"Custo total (n_horas_custo={m['n_incluida_custo']}): R$ {m['custo_total']:,.2f}")
 
-    print(f"\n=== Comparação com SARIMAX SEM temperatura (mesmo recorte 2024-01-20+, do log) ===")
+    print("\n=== Comparação com SARIMAX SEM temperatura (mesmo recorte 2024-01-20+, do log) ===")
     print("SARIMAX sem temp: MAPE=5.6895%")
     print(f"SARIMAX com temp (limpo): MAPE={m['mape']:.4f}%")
     diff = m["mape"] - 5.6895

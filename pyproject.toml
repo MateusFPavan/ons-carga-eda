@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # linha longa — muitos prints/f-strings de diagnóstico são deliberadamente
+             # descritivos (mensagens de sanity check, tabelas); comprimento de linha não é
+             # um risco real neste projeto (ver docs/evaluator_requirements.md §4).
+    "E402",  # import fora do topo do arquivo — padrão deliberado em vários scripts de
+             # modelo (modelo_prophet.py, modelo_sarima.py, verificar_*_prophet*.py): as
+             # variáveis de ambiente de single-thread (OMP/MKL/OPENBLAS/NUMEXPR/
+             # VECLIB/STAN_NUM_THREADS=1) precisam ser setadas ANTES de importar
+             # numpy/pandas/prophet para o teste de vazamento ser determinístico —
+             # mover os imports para o topo quebraria essa garantia.
+]

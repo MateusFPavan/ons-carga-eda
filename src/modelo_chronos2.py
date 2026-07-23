@@ -17,11 +17,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from modelo_naive import (  # noqa: E402
-    CARGA_SE_PATH, CUSTO_DIR, INICIO_AVALIACAO, N_AMOSTRAS_VAZAMENTO, PROCESSED_DIR,
+    CARGA_SE_PATH, INICIO_AVALIACAO, N_AMOSTRAS_VAZAMENTO, PROCESSED_DIR,
     SEED_VAZAMENTO, SanityCheckError, avaliar_modelo, calcular_custo,
     calcular_mae_insample_naive1, calcular_mae_insample_naive_sazonal, carregar_cmo_horario_se,
     checar_cobertura_cmo, gerar_origens, previsor_naive, rodar_walkforward, testar_vazamento,
-    valores_equivalentes, verificar_grade_regular,
+    verificar_grade_regular,
 )
 
 CHECKPOINTS = {
@@ -241,8 +241,8 @@ def main():
     else:
         print("-> melhor config do Chronos-2 NÃO bate a régua (naive semanal) neste período/dado.")
 
-    print(f"\nMASE(sazonal) do Simeone (2026), ERCOT, contexto 2048h: ~0,31.")
-    print(f"MASE(sazonal) do Chronos-2 aqui, SE/CO, contexto 2048h:")
+    print("\nMASE(sazonal) do Simeone (2026), ERCOT, contexto 2048h: ~0,31.")
+    print("MASE(sazonal) do Chronos-2 aqui, SE/CO, contexto 2048h:")
     for nome_modelo in CHECKPOINTS:
         linha = tabela[(tabela["modelo"] == nome_modelo) & (tabela["contexto_h"] == 2048)].iloc[0]
         print(f"  {nome_modelo}: {linha['mase_sazonal']:.4f}")

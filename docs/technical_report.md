@@ -63,10 +63,10 @@ A zero-shot foundation model decisively wins day-ahead SE/CO load forecasting on
 
 ## 9. Appendix / references
 
-Reproducibility and exact commands: [`docs/SETUP.md`](SETUP.md) (`python run_all.py` reproduces the result in ~1 minute from saved predictions). Canonical numbers: `reports/FACTS.md`. Comparative benchmark for context: Simeone (2026), a foundation-model load-forecasting study on ERCOT, treated here as a hypothesis to test on Brazilian data rather than a result to reproduce. `[TODO: add full citation and any project DOI.]`
+Reproducibility and exact commands: [`docs/SETUP.md`](SETUP.md) (`python run_all.py` reproduces the result in ~1 minute from saved predictions). Canonical numbers: `reports/FACTS.md`. Comparative benchmark for context: Simeone (2026), arXiv:2602.10848, a foundation-model load-forecasting study on ERCOT, treated here as a hypothesis to test on Brazilian data rather than a result to reproduce. This project itself has no DOI (personal portfolio project, not published) — cite the [GitHub repository](https://github.com/MateusFPavan/ons-carga-eda) directly if needed.
 
 ---
 
 ### Final self-check — MUST-HAVE items
 
-All present: **executive summary** (answer-first, §1), **explicit problem statement** (§2), **methodology with justified choices and stated assumptions** (§4, incl. the temporal scheme and the cost-metric assumption), **results naming exact metric + temporal split + baseline comparison** (§5), **plain-English interpretation with cost framing** (§6), **limitations** (§7). `[TODO]` items flagged inline (holiday-error quantification, CMO year-by-year coverage, citation/DOI) — none invented.
+All present: **executive summary** (answer-first, §1), **explicit problem statement** (§2), **methodology with justified choices and stated assumptions** (§4, incl. the temporal scheme and the cost-metric assumption), **results naming exact metric + temporal split + baseline comparison** (§5), **plain-English interpretation with cost framing** (§6), **limitations** (§7). `[TODO]` items flagged inline (holiday-error quantification, CMO year-by-year coverage) — none invented.

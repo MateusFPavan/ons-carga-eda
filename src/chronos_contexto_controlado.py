@@ -165,7 +165,7 @@ def main():
     m["mape_com"] = (m["previsto_com"] - m["real"]).abs() / m["real"].abs() * 100
     m["hora"] = m["din_instante"].dt.hour
 
-    print(f"\n=== DELTA LIMPO (contexto controlado) — MAPE agregado ===")
+    print("\n=== DELTA LIMPO (contexto controlado) — MAPE agregado ===")
     print(f"sem temp: {m['mape_sem'].mean():.4f}% | com temp: {m['mape_com'].mean():.4f}% | "
           f"delta: {m['mape_com'].mean()-m['mape_sem'].mean():+.4f}pp")
 

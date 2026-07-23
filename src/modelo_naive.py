@@ -312,7 +312,7 @@ def main():
     # --- confirmar que os dois modelos dão números diferentes (senão há bug)
     nomes = list(resultados.keys())
     mae_a, mae_b = resultados[nomes[0]]["mae"], resultados[nomes[1]]["mae"]
-    print(f"\n=== CONFIRMAÇÃO: modelos dão números diferentes ===")
+    print("\n=== CONFIRMAÇÃO: modelos dão números diferentes ===")
     print(f"MAE {nomes[0]}: {mae_a:.6f}")
     print(f"MAE {nomes[1]}: {mae_b:.6f}")
     if valores_equivalentes(mae_a, mae_b, rtol=1e-9, atol=1e-9):

@@ -67,8 +67,8 @@ def main():
     rng = np.random.default_rng(SEED_VAZAMENTO)
     origens_amostra = rng.choice(origens, size=min(N_AMOSTRAS_VAZAMENTO, len(origens)), replace=False)
 
-    print(f"Env vars de single-thread fixadas: STAN_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS, "
-          f"OPENBLAS_NUM_THREADS, NUMEXPR_NUM_THREADS, VECLIB_MAXIMUM_THREADS = 1")
+    print("Env vars de single-thread fixadas: STAN_NUM_THREADS, OMP_NUM_THREADS, MKL_NUM_THREADS, "
+          "OPENBLAS_NUM_THREADS, NUMEXPR_NUM_THREADS, VECLIB_MAXIMUM_THREADS = 1")
     print(f"Seed do Stan fixada: {SEED_STAN}")
     print(f"Testando {len(origens_amostra)} origens amostradas (mesma seed={SEED_VAZAMENTO} do teste original)...\n")
 
@@ -94,7 +94,7 @@ def main():
                 divergencias.append((origem, ts, v_prod, v_recalc, abs(v_prod - v_recalc)))
         print(f"  {origem.date()}: {'OK (bit-identico)' if not any(d[0]==origem for d in divergencias) else 'DIVERGIU'}")
 
-    print(f"\n=== RESULTADO ===")
+    print("\n=== RESULTADO ===")
     print(f"Comparações: {n_comparacoes}")
     print(f"Divergências: {len(divergencias)}")
     if divergencias:

@@ -106,7 +106,7 @@ def main():
     mape_2024 = float((erro_todas.abs() / obs_todas.abs()).mean() * 100)
     rmse_2024 = float(np.sqrt((erro_todas ** 2).mean()))
     mae_2024 = float(erro_todas.abs().mean())
-    print(f"\n=== B4: métrica estatística do naive, 2024 inteiro (SE/CO) ===")
+    print("\n=== B4: métrica estatística do naive, 2024 inteiro (SE/CO) ===")
     print(f"N horas (métrica estatística): {len(merged)}")
     print(f"MAPE: {mape_2024:.4f}%  RMSE: {rmse_2024:.4f} MW  MAE: {mae_2024:.4f} MW")
 

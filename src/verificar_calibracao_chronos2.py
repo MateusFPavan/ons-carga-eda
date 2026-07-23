@@ -99,10 +99,10 @@ def main():
     n_avaliado = len(m)
 
     print("\n=== TAREFA 1: nível nominal e cobertura ===")
-    print(f"Intervalo [P10, P90]: nível nominal = 0,90 - 0,10 = 0,80 (80%), NÃO 90%.")
+    print("Intervalo [P10, P90]: nível nominal = 0,90 - 0,10 = 0,80 (80%), NÃO 90%.")
     print(f"  Cobertura empírica: {cobertura_80*100:.2f}% (n={n_avaliado}) vs. nominal 80% "
           f"-> diferença = {cobertura_80*100 - 80:+.2f}pp")
-    print(f"Intervalo [P5, P95]: nível nominal = 0,95 - 0,05 = 0,90 (90%) — comparável a Simeone.")
+    print("Intervalo [P5, P95]: nível nominal = 0,95 - 0,05 = 0,90 (90%) — comparável a Simeone.")
     print(f"  Cobertura empírica: {cobertura_90*100:.2f}% (n={n_avaliado}) vs. nominal 90% "
           f"-> diferença = {cobertura_90*100 - 90:+.2f}pp")
 
@@ -111,7 +111,7 @@ def main():
           f"{'próxima do nominal (bem calibrado)' if abs(cobertura_80*100-80) <= 3 else ('subcoberto/superconfiante' if cobertura_80*100 < 80 else 'sobrecoberto/subconfiante')}.")
     print(f"  A 90% nominal: cobertura empírica {cobertura_90*100:.2f}% — "
           f"{'próxima do nominal (bem calibrado)' if abs(cobertura_90*100-90) <= 3 else ('subcoberto/superconfiante' if cobertura_90*100 < 90 else 'sobrecoberto/subconfiante')}.")
-    print(f"  Simeone (2026): ~95% empírico a 90% nominal (+5pp, levemente conservador/subconfiante).")
+    print("  Simeone (2026): ~95% empírico a 90% nominal (+5pp, levemente conservador/subconfiante).")
     print(f"  Aqui (SE/CO): {cobertura_90*100:.2f}% empírico a 90% nominal "
           f"({cobertura_90*100-90:+.2f}pp).")
 

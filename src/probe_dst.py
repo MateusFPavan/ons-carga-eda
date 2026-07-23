@@ -4,7 +4,6 @@ de horário de verão (DST) brasileiro. Não corrige, não decide — só extrai
 Saída: data/interim/dst_dates.csv (tabela larga por data/hora, subsistemas em coluna)
        data/interim/dst_dates.json (mesma coisa em JSON, com val bruto e parseado)
 """
-import json
 from pathlib import Path
 
 import pandas as pd

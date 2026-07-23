@@ -6,13 +6,10 @@ divergência — não corrige nada.
 import json
 import re
 import sys
-import zipfile
-from io import StringIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 
-import numpy as np
 import pandas as pd
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
