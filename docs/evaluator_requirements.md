@@ -8,7 +8,7 @@ This project delivers a **reproducible comparative study of day-ahead hourly ele
 
 ## 2. Audience & assumptions
 
-The primary reader is a **data-science recruiter or hiring technical lead**, reviewing in under ten minutes. Secondary readers: a technical reviewer verifying method, and a business stakeholder reading only the impact framing. Assumptions: the reviewer has Python 3.11+, no GPU, an internet connection for first-time dependency and data fetch, and **no prior context about the project or Brazilian electricity markets**. Everything needed must be in the repo.
+The primary reader is a **data-science recruiter or hiring technical lead**, reviewing in under ten minutes. Secondary readers: a technical reviewer verifying method, and a business stakeholder reading only the impact framing. Assumptions: the reviewer has Python 3.11+ (developed/run on 3.12.10 — see `docs/SETUP.md` §1), no GPU, an internet connection for first-time dependency and data fetch, and **no prior context about the project or Brazilian electricity markets**. Everything needed must be in the repo.
 
 ## 3. Functional requirements
 

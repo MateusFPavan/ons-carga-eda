@@ -6,8 +6,8 @@
 
 ## 1. Prerequisites
 
-- **OS:** developed and run on Windows (paths in logs are Windows); the code is plain Python and should run on Linux/macOS. `[TODO: confirm on Linux/macOS if that is a target.]`
-- **Python:** 3.11+ recommended. `[TODO: pin the exact interpreter version used, e.g. 3.11.x.]`
+- **OS:** developed and run on Windows (paths in logs are Windows); the code is plain Python with no OS-specific calls, so it should run on Linux/macOS — but this has **not been tested** on either. Treat cross-platform support as unverified, not confirmed.
+- **Python:** 3.11+ recommended; developed and run on **Python 3.12.10**.
 - **Hardware/GPU:** **CPU-only is sufficient.** `torch==2.13.0` runs on CPU here; no GPU required. The Chronos-2 foundation model (~120M params) runs on CPU in this project.
 - **Accounts:** none. All data sources are public and keyless (ONS open data; Open-Meteo needs no API key).
 
@@ -34,7 +34,13 @@ No bulk data is committed. The repo ships **`data/raw/MANIFEST.json`** (URLs + S
 
 - **Source:** ONS hourly load (`.../dataset/curva-carga-ho`), ONS CMO semi-hourly (dispatch price), and Open-Meteo `temperature_2m_previous_day1`.
 - **Placement:** downloaded files live under `data/raw/` (load, CMO, and `data/raw/temperatura/`); derived files under `data/processed/`. Both are git-ignored except `MANIFEST.json`.
-- **Fetch:** `[TODO: name the exact download script(s), e.g. src/download_raw.py, and the command to re-fetch. run_all.py does NOT download — it only verifies existing files against the manifest.]`
+- **Fetch:** `run_all.py` does **not** download — it only verifies existing files against the manifest (§5). The snapshot was assembled incrementally by five scripts, each idempotent (skips a file if it already exists locally with a matching hash) and each registering into the same `data/raw/MANIFEST.json`:
+  - `python src/download_raw.py` — ONS hourly load, 2015–2026 (`ANOS = range(2015, 2027)`).
+  - `python src/download_custo.py` — 2024 sample of the 3 candidate dispatch-cost datasets (CMO Semi-Horário, CMO Semanal, CVU).
+  - `python src/download_custo_cmo_2025_2026.py` — CMO Semi-Horário for 2025–2026, extending the cost coverage.
+  - `python src/download_temperatura_era5.py` — ERA5 reanalysis + day-ahead forecast temperature, 5 capitals, Jan/2024–Dec/2025.
+  - `python src/download_temperatura_fev_jul2026.py` — extends the temperature forecast coverage to 2026-02-01+.
+  - (`python src/download_temperatura_testes.py` also exists — small test-sample windows from the exploratory phase, not part of the reproducible snapshot proper, but registered in the same manifest.)
 - **Bundled sample:** none — the manifest + fetch script reconstruct the full snapshot.
 
 > **Retrospective revision:** ONS revises historical data. Re-fetching may change past values; this is detectable as a SHA-256 mismatch against `MANIFEST.json`.
@@ -89,7 +95,7 @@ A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** / P05–P9
 
 ## 7. Runtime & resources
 
-`python run_all.py` (default, reproduces the result): **~1 min**. `--stage data`: ~54 s. `--stage results`: ~11 s. `--stage models` (retrain, optional): **~4 h** (Prophet ~3 h Stan fit per origin; SARIMA ~80 min; Chronos-2 ~10 min). All CPU-only; peak RAM `[TODO: measure]`.
+`python run_all.py` (default, reproduces the result): **~1 min**. `--stage data`: ~54 s. `--stage results`: ~11 s. `--stage models` (retrain, optional): **~4 h** (Prophet ~3 h Stan fit per origin; SARIMA ~80 min; Chronos-2 ~10 min). All CPU-only; peak RAM for `python run_all.py` (default, measured with `psutil` across the whole process tree — `run_all.py` spawns each stage as a subprocess): **~306 MiB**. This is the `data`+`results` figure; `--stage models` (loading Chronos-2/torch, fitting Prophet/SARIMA) was not measured here and will be higher.
 
 ## 8. Troubleshooting
 
@@ -116,10 +122,10 @@ Everything else (unused imports, undefined names, basic pycodestyle) is enforced
 ## Final self-check — MUST-HAVE items
 
 - **Pinned deps + install:** present (§2).
-- **Data access:** present (§3), with `[TODO]` on the exact fetch-script name.
+- **Data access:** present (§3), including the five fetch scripts by name.
 - **Exact reproduce commands, ordered:** `run_all.py` fully specified with staged modes (§5); default reproduces the result in ~1 min from saved predictions, `--stage models` retrains. No reproducibility `[TODO]` remains.
 - **Expected results & seeds/run count:** present (§6).
 - **Relative paths / no committed secrets:** present (§3, §4).
 - **Code quality:** ruff configured and run (§9).
 
-**Missing/unverified, flagged inline:** exact fetch-script name, interpreter patch version, peak RAM, non-Windows confirmation. None invented.
+**Missing/unverified, flagged inline:** non-Windows confirmation (declared untested, not invented as working).
