@@ -152,7 +152,6 @@ def main():
     ]:
         salvo = pd.read_parquet(PROCESSED_DIR / fname)
         previsor = previsor_predict(usar_temp, temp_df)
-        real = df.set_index("din_instante")["val_cargaenergiahomwmed"]
 
         diffs_rel = []
         for origem in origens_amostra:

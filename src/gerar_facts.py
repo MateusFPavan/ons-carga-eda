@@ -83,7 +83,6 @@ def secao_a_proveniencia(manifest: dict) -> dict:
         int(k.replace("CURVA_CARGA_", "").replace(".parquet", "")): v.get("http_last_modified")
         for k, v in entradas_ons.items()
     }
-    datas_lm = {ano: lm.split(" ")[1:4] and " ".join(lm.split(" ")[1:4]) for ano, lm in last_modified_por_ano.items() if lm}
     # agrupar por data (dia) do Last-Modified
     grupos_por_data = {}
     for ano, lm in sorted(last_modified_por_ano.items()):
@@ -120,7 +119,6 @@ def secao_b_esquema(full: pd.DataFrame, dtype_por_ano: dict) -> dict:
         sub = full[full["ano_arquivo"] == ano]
         if len(sub) == 0:
             continue
-        colunas = set(sub.columns) & (EXPECTED_COLUMNS | {"id_subsistema", "nom_subsistema", "din_instante", "val_cargaenergiahomwmed"})
         colunas_presentes = {"id_subsistema", "nom_subsistema", "din_instante", "val_cargaenergiahomwmed"} & set(sub.columns)
         divergem = sorted(EXPECTED_COLUMNS ^ colunas_presentes)
         val_dtype = dtype_por_ano[ano]
@@ -267,7 +265,6 @@ def secao_d_dst(full: pd.DataFrame, timestamps_dst: dict) -> dict:
         ts = pd.Timestamp(ts_str)
         linha = full[full["din_instante"] == ts][["id_subsistema", "val_raw_str"]].sort_values("id_subsistema")
         valores = {r["id_subsistema"]: (r["val_raw_str"] if r["val_raw_str"].strip() != "" else "(vazio)") for _, r in linha.iterrows()}
-        n_dia = full[(full["din_instante"].dt.date == ts.date()) & (full["id_subsistema"] == "SE")]
         detalhe_inexistentes.append({"timestamp": ts_str, "valores_por_subsistema": valores})
 
     detalhe_ambiguos = []

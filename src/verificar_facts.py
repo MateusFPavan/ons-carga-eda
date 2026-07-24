@@ -211,7 +211,6 @@ def main():
         ano_ref = sub_se["dia"].min().year
         calendario = set(pd.date_range(f"{ano_ref}-01-01", f"{ano_ref}-12-31", freq="D").date)
         dias_ausentes_real = sorted(str(d) for d in (calendario - dias_presentes))
-        dias_ausentes_facts = re.findall(r"^- (\d{4}-\d{2}-\d{2})$", texto, re.MULTILINE)
         # a lista de dias ausentes no FACTS.md aparece logo após "ausentes**, gerados por código"
         idx_secao = texto.find("dias inteiramente")
         trecho = texto[idx_secao:idx_secao + 400] if idx_secao != -1 else ""

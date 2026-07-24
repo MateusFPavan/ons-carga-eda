@@ -222,7 +222,6 @@ def main():
         temp_df[f"temp_{cidade}"] = carregar_temperatura_cidade(cidade).reindex(temp_df["din_instante"]).to_numpy()
     temp_df = temp_df.set_index("din_instante")
 
-    resultados = {}
     dfs_aval = {}
     previsores = {}
     for usar_temp, nome, fname in [

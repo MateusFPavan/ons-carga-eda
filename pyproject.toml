@@ -14,4 +14,8 @@ ignore = [
              # VECLIB/STAN_NUM_THREADS=1) precisam ser setadas ANTES de importar
              # numpy/pandas/prophet para o teste de vazamento ser determinístico —
              # mover os imports para o topo quebraria essa garantia.
+    "E741",  # nome de variável ambíguo (`l` como variável de loop/generator em
+             # comparar_inmet_era5.py, gerar_facts.py, limpar.py, verificar_facts.py) —
+             # cosmético, 11 ocorrências revisadas (auditoria de 2026-07); renomear
+             # tocaria múltiplas linhas por instância sem mudar comportamento.
 ]

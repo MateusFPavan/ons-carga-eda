@@ -69,8 +69,7 @@ def task_1_2_janelas(full: pd.DataFrame):
             classificacao = "ok"
             utc_str = ""
             try:
-                d = dt.datetime(ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second, tzinfo=TZ)
-                # fold default (0) e checagem explícita de ambiguidade/inexistência via zoneinfo
+                # checagem explícita de ambiguidade/inexistência via zoneinfo (fold=0 vs fold=1)
                 exists_fold0 = dt.datetime(ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second, tzinfo=TZ, fold=0)
                 exists_fold1 = dt.datetime(ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second, tzinfo=TZ, fold=1)
                 utc0 = exists_fold0.astimezone(dt.timezone.utc)
@@ -78,8 +77,6 @@ def task_1_2_janelas(full: pd.DataFrame):
                 if utc0 != utc1:
                     # ambíguo (2 instantes físicos reais) OU inexistente (nenhum instante físico real)
                     # distinguir: ambíguo se a hora local está dentro do intervalo repetido (offset local igual em ambos os folds coincide com um antes/depois real)
-                    off0 = exists_fold0.utcoffset()
-                    off1 = exists_fold1.utcoffset()
                     # heurística exata via zoneinfo: comparar se o horário local existe fisicamente checando
                     # se fold=0 reproduz o mesmo horário local quando convertido de volta
                     back0 = utc0.astimezone(TZ)
