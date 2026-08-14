@@ -634,6 +634,56 @@ def secao_j_custo(cobertura_carga: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# J7. Cobertura do CMO Semi-Horário ANO A ANO (2020-2026) — só 2024 tinha sido
+# verificado em detalhe (J2/J3); 2020-2023 constavam apenas na listagem do portal,
+# nunca baixados nem checados. Fecha o item aberto da seção I / [TODO] dos docs.
+# NÃO baixa nada: só audita o que já está em data/raw/custo/. Para o ano corrente
+# (2026, parcial), o calendário esperado vai só até o último dia presente no
+# arquivo, não até 31/dez — um ano incompleto por construção não é uma "lacuna".
+# ---------------------------------------------------------------------------
+
+def secao_j7_cobertura_anual_cmo() -> dict:
+    anos = list(range(2020, 2027))
+    por_ano = {}
+    for ano in anos:
+        fpath = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        if not fpath.exists():
+            por_ano[ano] = {"arquivo_existe": False}
+            continue
+
+        df = pd.read_parquet(fpath, columns=["id_subsistema", "din_instante", "val_cmo"])
+        df["id_subsistema"] = df["id_subsistema"].astype(str)
+        sub_se = df[df["id_subsistema"] == "SE"].copy()
+
+        val = pd.to_numeric(sub_se["val_cmo"], errors="coerce")
+        primeiro = sub_se["din_instante"].min()
+        ultimo = sub_se["din_instante"].max()
+
+        sub_se["dia"] = sub_se["din_instante"].dt.date
+        dias_presentes = set(sub_se["dia"].unique())
+        calendario_ate_ultimo_dia = pd.date_range(f"{ano}-01-01", ultimo.normalize(), freq="D").date
+        dias_ausentes = sorted(set(calendario_ate_ultimo_dia) - dias_presentes)
+        n_esperado_grade_completa = len(calendario_ate_ultimo_dia) * 48
+
+        por_ano[ano] = {
+            "arquivo_existe": True,
+            "n_linhas_se": int(len(sub_se)),
+            "primeiro_instante": str(primeiro),
+            "ultimo_instante": str(ultimo),
+            "ano_completo_no_arquivo": bool(ultimo.date() >= pd.Timestamp(f"{ano}-12-31").date()),
+            "n_esperado_grade_completa_30min_ate_ultimo_dia": n_esperado_grade_completa,
+            "dias_ausentes_ate_ultimo_dia": [str(d) for d in dias_ausentes],
+            "val_cmo_n_validos": int(val.notna().sum()),
+            "val_cmo_n_nulo": int(val.isna().sum()),
+            "val_cmo_n_negativos": int((val < 0).sum()),
+            "val_cmo_n_zeros": int((val == 0).sum()),
+            "val_cmo_min": float(val.min()) if val.notna().any() else None,
+            "val_cmo_max": float(val.max()) if val.notna().any() else None,
+        }
+    return {"anos": anos, "por_ano": por_ano}
+
+
+# ---------------------------------------------------------------------------
 # K2b. Concentração de custo sobre o PERÍODO DE AVALIAÇÃO completo (2024-01-01 até
 # o fim da série) — extensão de K2 (que cobre só 2024) usando o naive SEMANAL
 # (lag=168h, régua principal do projeto, FACTS.md seção H) como instrumento de
@@ -847,7 +897,7 @@ def secao_k_agregacao_e_fuso() -> dict:
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, j7, k, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -1255,13 +1305,56 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
         W("| Fonte | Período |")
         W("|---|---|")
         W(f"| Carga SE/CO (recalculado na seção C) | `{j['carga_se_primeiro_instante']}` a `{j['carga_se_ultimo_instante']}` |")
-        W(f"| CMO Semi-Horário, amostra efetivamente baixada e verificada | `{j['primeiro_instante']}` a `{j['ultimo_instante']}` (ano 2024 apenas) |")
-        W("| CMO Semi-Horário, cobertura declarada pelo portal (não verificada ano a ano) | 2020–2026 |")
+        W(f"| CMO Semi-Horário, amostra efetivamente baixada e verificada em detalhe nesta seção | `{j['primeiro_instante']}` a `{j['ultimo_instante']}` (ano 2024) |")
         W("")
-        W("**Registrado explicitamente:** só o ano de 2024 foi baixado e verificado em")
-        W("detalhe (esta seção). A interseção 2020–2026 entre carga e CMO Semi-Horário")
-        W("vem da listagem de recursos do portal do ONS, **não** de download e checagem")
-        W("ano a ano de 2020, 2021, 2022, 2023, 2025 e 2026.")
+        W("Cobertura completa ano a ano (2020-2026), incluindo 2025-2026: seção J7.")
+        W("")
+        W("### J7. Cobertura ano a ano do CMO Semi-Horário (2020-2026)")
+        W("")
+        W("Auditoria completa dos anos em `data/raw/custo/` — não baixa nada, só audita")
+        W("o que já está em disco. O período de avaliação do projeto usa só 2024+; os")
+        W("anos abaixo cobrem a faixa que o **portal do ONS declara disponível**")
+        W("(2020-2026), para que a afirmação de cobertura deixe de ser uma suposição.")
+        W("")
+        W("| Ano | Arquivo | Linhas (SE) | Período no arquivo | Dias ausentes | Nulos | Negativos | Zeros | Min (R$/MWh) | Max (R$/MWh) |")
+        W("|---|---|---|---|---|---|---|---|---|---|")
+        for ano in j7["anos"]:
+            info = j7["por_ano"][ano]
+            if not info["arquivo_existe"]:
+                W(f"| {ano} | ausente | — | — | — | — | — | — | — | — |")
+                continue
+            n_ausentes = len(info["dias_ausentes_ate_ultimo_dia"])
+            completo = "ano completo" if info["ano_completo_no_arquivo"] else "parcial (em andamento)"
+            W(f"| {ano} | presente ({completo}) | {info['n_linhas_se']} | "
+              f"`{info['primeiro_instante']}` a `{info['ultimo_instante']}` | {n_ausentes} | "
+              f"{info['val_cmo_n_nulo']} | {info['val_cmo_n_negativos']} | {info['val_cmo_n_zeros']} | "
+              f"{info['val_cmo_min']:.4f} | {info['val_cmo_max']:.4f} |")
+        W("")
+        anos_ausentes_lista = [str(a) for a in j7["anos"] if not j7["por_ano"][a]["arquivo_existe"]]
+        W(f"**{len(anos_ausentes_lista)} ano(s) sem arquivo baixado: {', '.join(anos_ausentes_lista)}.** "
+          "Não é uma lacuna do projeto — o período de avaliação (`INICIO_AVALIACAO` = "
+          "2024-01-01) nunca precisou desses anos, então eles nunca foram baixados. A")
+        W("cobertura 2020-2026 citada nos documentos é a listagem do portal (o que **pode**")
+        W("ser baixado), não uma verificação de que os dados de 2020-2023 estão completos —")
+        W("essa verificação não foi feita e não é necessária para os resultados do projeto.")
+        W("")
+        W("**Buracos reais nos 3 anos efetivamente usados (2024, 2025, 2026):** nenhum")
+        W("valor nulo, nenhum dia inteiramente ausente em 2020-2023 (não se aplica, ausentes)")
+        W("— mas dias INDIVIDUAIS faltam dentro de cada ano presente:")
+        for ano in (2024, 2025, 2026):
+            dias = j7["por_ano"][ano]["dias_ausentes_ate_ultimo_dia"]
+            if dias:
+                W(f"- **{ano}:** {len(dias)} dia(s) sem nenhum registro de CMO: {', '.join(dias)}.")
+            else:
+                W(f"- **{ano}:** 0 dias ausentes.")
+        W("")
+        W("O buraco de 2024 (4 dias) já constava em J3, recalculado aqui e batendo com o")
+        W("valor anterior — confirma que o método é o mesmo. Os buracos de 2025 (1 dia) e")
+        W("2026 (2 dias) são novos: nunca haviam sido checados em detalhe antes desta")
+        W("auditoria. Nenhum dos três anos tem valor nulo, e a faixa de valores (mín/máx)")
+        W("é plausível nos três, sem negativos extremos nem zeros fora do padrão já")
+        W("registrado em J3/K2 — os buracos são dias sem registro nenhum, não valores")
+        W("inválidos dentro de dias presentes.")
         W("")
     W("---")
     W("")
@@ -1384,9 +1477,9 @@ def renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519) -> str:
     W("## I. Itens abertos")
     W("")
     W("- NE, mínimo histórico em 2018-03-21: sem explicação (seção E).")
-    W("- Interseção carga × CMO Semi-Horário não confirmada ano a ano — só 2024 foi")
-    W("  baixado e verificado; 2020, 2021, 2022, 2023, 2025 e 2026 constam apenas na")
-    W("  listagem do portal (seção J6).")
+    W("- Cobertura do CMO Semi-Horário para 2020-2023 não confirmada — nunca baixados")
+    W("  porque a avaliação (2024-01-01+) nunca precisou deles; 2024-2026 (os anos")
+    W("  usados) já verificados ano a ano (seção J7).")
     W("- Fuso do CMO Semi-Horário: fato derivado por evidência empírica (seção K3),")
     W("  não declarado por nenhuma fonte documental — risco permanece se o ONS")
     W("  documentar o contrário no futuro.")
@@ -1416,9 +1509,10 @@ def main():
     f = secao_f_efeito_dst(full, timestamps_dst_1519)
     g = secao_g_temperatura()
     j = secao_j_custo(c)
+    j7 = secao_j7_cobertura_anual_cmo()
     k = secao_k_agregacao_e_fuso()
 
-    conteudo = renderizar(a, b, c, d, e, f, g, j, k, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")

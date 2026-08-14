@@ -309,11 +309,38 @@ recalculada.
 
 ### 12e. Cobertura: custo só no período de teste
 
-O CMO Semi-Horário cobre 2020–2026 segundo a listagem do portal — só o ano de 2024
-foi efetivamente baixado e verificado em detalhe; 2020, 2021, 2022, 2023, 2025 e
-2026 constam apenas na listagem, não confirmados ano a ano. A métrica de custo é
-aplicada apenas ao período de teste (2020 em diante), nunca ao treino do modelo
-principal, que usa todo o histórico 2015–2026 de carga.
+O CMO Semi-Horário cobre 2020–2026 segundo a listagem do portal. Verificado ano a
+ano (FACTS.md seção J7) para os anos que a avaliação de fato usa — **2024, 2025 e
+2026: todos presentes, 0 valores nulos, faixa de valores plausível**, com poucos
+dias individuais sem registro (4 em 2024, 1 em 2025, 2 em 2026 — já excluídos da
+métrica de custo pelo próprio `calcular_custo`, não descartados em silêncio). 2020,
+2021, 2022 e 2023 nunca foram baixados — não por lacuna, mas porque o período de
+avaliação (2024-01-01+) nunca precisou deles. A métrica de custo é aplicada apenas
+ao período de teste, nunca ao treino do modelo principal, que usa todo o histórico
+2015–2026 de carga.
+
+### 12f. Custo assimétrico: subprevisão penalizada mais que superprevisão
+
+O custo simétrico (12a) trata erro-para-cima e erro-para-baixo como equivalentes —
+mas operacionalmente não são. Subprever carga (previsto < real) significa faltar
+energia: exige reserva rápida (peaker), compra emergencial ou, no extremo, corte de
+carga. Superprever (previsto > real) só desperdiça capacidade já comprometida —
+mais barato. Esta assimetria é consenso na literatura de previsão de carga.
+
+**Definição, recomputada das previsões já salvas (não re-treina nada):**
+- Superprevisão: custo = |erro| × CMO_horário × 1h (igual ao custo simétrico).
+- Subprevisão: custo = |erro| × CMO_horário × fator_sub × 1h, `fator_sub` ≥ 1.
+
+`fator_sub` não é cravado — é uma varredura de sensibilidade (1,0 controle
+simétrico; 1,5, 2,0, 3,0 como faixa ancorada no custo relativo de reserva rápida
+vs. base). O extremo real de escassez (VOLL — *Value of Lost Load*, ~US$10.000/MWh
+em mercados como o MISO, ordens de magnitude acima do CMO típico) **não entra no
+cálculo base**: aplica-se só nas horas de corte de carga efetivo, que este dataset
+não identifica — declarado como limitação (seção 16), não modelado.
+
+Resultados (custo por modelo × fator, viés direcional por modelo, robustez do
+ranking): `reports/FACTS.md` seção L, `reports/tabela_custo_assimetrico.csv`,
+`reports/tabela_vies_direcional.csv`, `reports/figures/resultado_8_custo_assimetrico.png`.
 
 ---
 
@@ -375,8 +402,9 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
 - O fuso horário do CMO é um fato derivado por evidência empírica, não uma
   declaração de fonte — o próprio relatório que gerou essa evidência concluiu que o
   fuso permanece desconhecido sob critério documental estrito (seção 12d).
-- A cobertura do CMO Semi-Horário fora de 2024 (2020–2023, 2025–2026) não foi
-  confirmada ano a ano — só está na listagem do portal (seção 12e).
+- A cobertura do CMO Semi-Horário para 2020–2023 não foi confirmada — esses anos
+  nunca foram baixados porque a avaliação nunca precisou deles; 2024–2026 (os anos
+  usados) já foram verificados ano a ano (seção 12e, FACTS.md seção J7).
 - O mínimo histórico do subsistema NE (2018-03-21 16:00:00) não coincide com
   nenhuma das 9 datas de transição de DST e permanece sem explicação.
 - A escolha do método de agregação do CMO (média) foi testada, mas ainda afeta 586
@@ -392,6 +420,14 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
   de terceiros não é possível a partir daqui; isso é uma limitação inerente a
   qualquer avaliação zero-shot desse tipo de modelo sobre séries públicas, não
   específica deste projeto.
+- O projeto prevê CARGA (demanda), não despacho (oferta). A restrição operacional
+  real — "oferta nunca pode ficar abaixo da demanda", sob pena de corte de carga no
+  extremo — é responsabilidade do operador do sistema, não do modelo de previsão;
+  nenhum modelo aqui a impõe fisicamente. O custo assimétrico (seção 12f) é a forma
+  como este projeto *reconhece* que subprever é operacionalmente pior que
+  superprever, penalizando mais o erro na direção que exigiria reserva rápida ou,
+  no limite, corte de carga — mas isso é uma penalização na métrica de avaliação,
+  não uma restrição física garantida por nenhum dos quatro modelos comparados.
 
 ### Extensões possíveis
 

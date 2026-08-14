@@ -30,7 +30,7 @@
 
 **Missing data.** The load target has **87 empty strings** across 2015–2024 (a column the official dictionary declares non-nullable). For SE/CO specifically: 24 missing on 2015-04-09 and 4 daylight-saving-transition gaps in October, none imputed. See §4.
 
-**Does it sample a larger set?** It is the complete published SE/CO series for the window, not a sample. CMO (dispatch price) was verified in detail only for 2024; 2020–2023 and 2025–2026 coverage is asserted by the portal listing, not year-by-year verified `[TODO: verify CMO 2020–2023, 2025–2026]`.
+**Does it sample a larger set?** It is the complete published SE/CO series for the window, not a sample. CMO (dispatch price) is verified year-by-year for 2024–2026 — the years the evaluation period actually uses (`reports/FACTS.md` §J7): all three present, 0 null values, a plausible value range, and a small number of individual days with no CMO record at all (4 in 2024, 1 in 2025, 2 in 2026 — already excluded from the cost metric via `calcular_custo`'s "no CMO available" path, not silently dropped). 2020–2023 were never downloaded because the evaluation period (2024-01-01+) never needed them — the 2020–2026 figure quoted elsewhere is the ONS portal's *listing* of what is available, not a claim that 2020–2023 were checked.
 
 **Sensitive / confidential content?** None. These are aggregate grid measurements and weather; no personal data, no individuals.
 
@@ -54,7 +54,7 @@
 
 **How acquired?** Programmatic download from the ONS open-data S3 endpoint (`.../dataset/curva-carga-ho`) and the Open-Meteo Previous Runs API. No scraping of protected pages, no authentication bypass.
 
-**Time range & resolution.** Load: hourly, 2015–2026. Temperature: hourly, day-ahead forecast, 2024-01-20 onward (usable). CMO dispatch price: 30-minute native, 2024 verified.
+**Time range & resolution.** Load: hourly, 2015–2026. Temperature: hourly, day-ahead forecast, 2024-01-20 onward (usable). CMO dispatch price: 30-minute native, 2024–2026 verified year-by-year (`reports/FACTS.md` §J7).
 
 **When?** The load snapshot was downloaded **2026-07-16**, recorded by SHA-256 in `MANIFEST.json`. This matters because ONS runs a "recurring consistency process" that revises data retrospectively — 2015–2024 files share a single batch `Last-Modified` date (2025-10-09), so the series is **not immutable**; the snapshot is identified by hash rather than assumed fixed.
 
@@ -111,4 +111,4 @@ Source series are public: ONS load and CMO under **CC-BY**; Open-Meteo temperatu
 
 All six present: **provenance/motivation** (§1, §3), **composition + data dictionary** (§2), **collection process** (§3), **preprocessing/exclusions** (§4), **uses + discouraged uses** (§5), **license** (§6).
 
-Gaps marked inline as `[TODO]`: CMO year-by-year verification for non-2024 years. Not invented; flagged as unestablished.
+No `[TODO]` gaps remain — CMO year-by-year verification (§2) is now closed for 2024–2026, the years the evaluation uses.

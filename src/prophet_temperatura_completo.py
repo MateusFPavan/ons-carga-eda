@@ -90,6 +90,10 @@ def contexto_efetivo_horas(origem: pd.Timestamp):
 
 
 def carregar_temperatura_cidade(cidade: str) -> pd.Series:
+    # temperature_2m_previous_day1 (não temperature_2m observada): é a previsão
+    # feita 1 dia antes, o mesmo lead time do alvo day-ahead — usar a observada
+    # seria vazamento (o operador não tem a temperatura real de D quando precisa
+    # prever a carga de D). Ver reports/DATA_CARD.md seção 2.
     frames = []
     for sufixo in ("2024_2025", "jan2026", "fev_jul2026"):
         fpath = RAW_TEMP_DIR / f"openmeteo_previous_day1_{cidade}_{sufixo}.json"

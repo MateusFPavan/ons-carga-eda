@@ -392,13 +392,46 @@ realizado — é uma estimativa sob suposição explícita.**
 | Fonte | Período |
 |---|---|
 | Carga SE/CO (recalculado na seção C) | `2015-01-01 00:00:00` a `2026-07-15 23:00:00` |
-| CMO Semi-Horário, amostra efetivamente baixada e verificada | `2024-01-01 00:00:00` a `2024-12-31 23:30:00` (ano 2024 apenas) |
-| CMO Semi-Horário, cobertura declarada pelo portal (não verificada ano a ano) | 2020–2026 |
+| CMO Semi-Horário, amostra efetivamente baixada e verificada em detalhe nesta seção | `2024-01-01 00:00:00` a `2024-12-31 23:30:00` (ano 2024) |
 
-**Registrado explicitamente:** só o ano de 2024 foi baixado e verificado em
-detalhe (esta seção). A interseção 2020–2026 entre carga e CMO Semi-Horário
-vem da listagem de recursos do portal do ONS, **não** de download e checagem
-ano a ano de 2020, 2021, 2022, 2023, 2025 e 2026.
+Cobertura completa ano a ano (2020-2026), incluindo 2025-2026: seção J7.
+
+### J7. Cobertura ano a ano do CMO Semi-Horário (2020-2026)
+
+Auditoria completa dos anos em `data/raw/custo/` — não baixa nada, só audita
+o que já está em disco. O período de avaliação do projeto usa só 2024+; os
+anos abaixo cobrem a faixa que o **portal do ONS declara disponível**
+(2020-2026), para que a afirmação de cobertura deixe de ser uma suposição.
+
+| Ano | Arquivo | Linhas (SE) | Período no arquivo | Dias ausentes | Nulos | Negativos | Zeros | Min (R$/MWh) | Max (R$/MWh) |
+|---|---|---|---|---|---|---|---|---|---|
+| 2020 | ausente | — | — | — | — | — | — | — | — |
+| 2021 | ausente | — | — | — | — | — | — | — | — |
+| 2022 | ausente | — | — | — | — | — | — | — | — |
+| 2023 | ausente | — | — | — | — | — | — | — | — |
+| 2024 | presente (ano completo) | 17376 | `2024-01-01 00:00:00` a `2024-12-31 23:30:00` | 4 | 0 | 0 | 2211 | 0.0000 | 2126.0300 |
+| 2025 | presente (ano completo) | 17472 | `2025-01-01 00:00:00` a `2025-12-31 23:30:00` | 1 | 0 | 3 | 1370 | -0.0800 | 2151.7000 |
+| 2026 | presente (parcial (em andamento)) | 9552 | `2026-01-01 00:00:00` a `2026-07-20 23:30:00` | 2 | 0 | 0 | 938 | 0.0000 | 4870.9400 |
+
+**4 ano(s) sem arquivo baixado: 2020, 2021, 2022, 2023.** Não é uma lacuna do projeto — o período de avaliação (`INICIO_AVALIACAO` = 2024-01-01) nunca precisou desses anos, então eles nunca foram baixados. A
+cobertura 2020-2026 citada nos documentos é a listagem do portal (o que **pode**
+ser baixado), não uma verificação de que os dados de 2020-2023 estão completos —
+essa verificação não foi feita e não é necessária para os resultados do projeto.
+
+**Buracos reais nos 3 anos efetivamente usados (2024, 2025, 2026):** nenhum
+valor nulo, nenhum dia inteiramente ausente em 2020-2023 (não se aplica, ausentes)
+— mas dias INDIVIDUAIS faltam dentro de cada ano presente:
+- **2024:** 4 dia(s) sem nenhum registro de CMO: 2024-02-08, 2024-02-17, 2024-07-13, 2024-12-29.
+- **2025:** 1 dia(s) sem nenhum registro de CMO: 2025-05-16.
+- **2026:** 2 dia(s) sem nenhum registro de CMO: 2026-01-21, 2026-05-30.
+
+O buraco de 2024 (4 dias) já constava em J3, recalculado aqui e batendo com o
+valor anterior — confirma que o método é o mesmo. Os buracos de 2025 (1 dia) e
+2026 (2 dias) são novos: nunca haviam sido checados em detalhe antes desta
+auditoria. Nenhum dos três anos tem valor nulo, e a faixa de valores (mín/máx)
+é plausível nos três, sem negativos extremos nem zeros fora do padrão já
+registrado em J3/K2 — os buracos são dias sem registro nenhum, não valores
+inválidos dentro de dias presentes.
 
 ---
 
@@ -497,9 +530,9 @@ documentar o contrário, a métrica de custo precisa ser recalculada.
 ## I. Itens abertos
 
 - NE, mínimo histórico em 2018-03-21: sem explicação (seção E).
-- Interseção carga × CMO Semi-Horário não confirmada ano a ano — só 2024 foi
-  baixado e verificado; 2020, 2021, 2022, 2023, 2025 e 2026 constam apenas na
-  listagem do portal (seção J6).
+- Cobertura do CMO Semi-Horário para 2020-2023 não confirmada — nunca baixados
+  porque a avaliação (2024-01-01+) nunca precisou deles; 2024-2026 (os anos
+  usados) já verificados ano a ano (seção J7).
 - Fuso do CMO Semi-Horário: fato derivado por evidência empírica (seção K3),
   não declarado por nenhuma fonte documental — risco permanece se o ONS
   documentar o contrário no futuro.

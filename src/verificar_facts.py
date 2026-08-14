@@ -219,6 +219,52 @@ def main():
     else:
         print(f"[AUSENTE] {fpath} não encontrado — seção J não verificada")
 
+    print("\n=== J7. cobertura ano a ano do CMO Semi-Horário (recomputo independente, 2020-2026) ===")
+    idx_j7 = texto.find("J7. Cobertura ano a ano")
+    trecho_j7 = texto[idx_j7:idx_j7 + 3000] if idx_j7 != -1 else ""
+    for ano in range(2020, 2027):
+        fpath_ano = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        linha_facts = next((l for l in trecho_j7.splitlines() if l.startswith(f"| {ano} |")), None)
+        existe_real = fpath_ano.exists()
+        if linha_facts is None:
+            print(f"[AUSENTE] linha do ano {ano} não encontrada na tabela J7 do FACTS.md")
+            continue
+        campos = [c.strip() for c in linha_facts.strip("|").split("|")]
+        existe_facts = campos[1] != "ausente"
+        checar(f"CMO {ano} arquivo existe", existe_real, existe_facts)
+        if not existe_real:
+            continue
+
+        dfc_ano = pd.read_parquet(fpath_ano, columns=["id_subsistema", "din_instante", "val_cmo"])
+        dfc_ano["id_subsistema"] = dfc_ano["id_subsistema"].astype(str)
+        sub_se_ano = dfc_ano[dfc_ano["id_subsistema"] == "SE"].copy()
+        n_linhas_real = int(len(sub_se_ano))
+        checar(f"CMO {ano} n_linhas SE", n_linhas_real, int(campos[2]))
+
+        val_ano = pd.to_numeric(sub_se_ano["val_cmo"], errors="coerce")
+        n_nulo_real = int(val_ano.isna().sum())
+        checar(f"CMO {ano} n_nulo", n_nulo_real, int(campos[5]))
+
+    print("\n=== J7. buracos por ano (recomputo independente, 2024-2026) ===")
+    m_buracos = re.findall(r"\*\*(\d{4}):\*\* (\d+) dia\(s\)(?: sem nenhum registro de CMO: ([\d\-, ]+))?\.", trecho_j7)
+    buracos_facts = {}
+    for ano_str, n_str, lista_str in m_buracos:
+        dias = [d.strip() for d in lista_str.split(",")] if lista_str.strip() else []
+        buracos_facts[int(ano_str)] = dias
+    for ano in (2024, 2025, 2026):
+        fpath_ano = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        if not fpath_ano.exists():
+            continue
+        dfc_ano = pd.read_parquet(fpath_ano, columns=["id_subsistema", "din_instante"])
+        dfc_ano["id_subsistema"] = dfc_ano["id_subsistema"].astype(str)
+        sub_se_ano = dfc_ano[dfc_ano["id_subsistema"] == "SE"].copy()
+        sub_se_ano["dia"] = sub_se_ano["din_instante"].dt.date
+        dias_presentes = set(sub_se_ano["dia"].unique())
+        ultimo = sub_se_ano["din_instante"].max()
+        calendario_ano = set(pd.date_range(f"{ano}-01-01", ultimo.normalize(), freq="D").date)
+        ausentes_real = sorted(str(d) for d in (calendario_ano - dias_presentes))
+        checar(f"CMO {ano} dias ausentes (lista)", ausentes_real, buracos_facts.get(ano, []))
+
     print("\n=== RESUMO ===")
     if erros:
         print(f"\n{len(erros)} DIVERGÊNCIA(S) ENCONTRADA(S):")
