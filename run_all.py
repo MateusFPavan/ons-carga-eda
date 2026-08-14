@@ -110,6 +110,7 @@ DATA_ETAPAS = [
 
 RESULTS_ETAPAS = [
     ("Tabela comparativa + gráficos (plot_resultados.py)", etapa_rodar_script("plot_resultados.py")),
+    ("Custo assimétrico + viés direcional (custo_assimetrico.py)", etapa_rodar_script("custo_assimetrico.py")),
 ]
 
 # ordem: naive é instantâneo, SARIMA/Chronos são baratos perto do Prophet — rodar

@@ -245,6 +245,67 @@ def calcular_custo(avaliacao: pd.DataFrame, cmo_horario: pd.Series) -> dict:
     }
 
 
+def calcular_custo_assimetrico(avaliacao: pd.DataFrame, cmo_horario: pd.Series, fator_sub: float) -> dict:
+    """Extensão de calcular_custo (ESCOPO.md seção 12f): subprevisão (previsto <
+    real, erro < 0 — falta energia, reserva rápida/corte no extremo) custa
+    fator_sub vezes mais que superprevisão (previsto > real, erro > 0 — sobra
+    capacidade), ambas ao preço marginal (CMO). fator_sub=1.0 reduz
+    algebricamente ao custo simétrico de calcular_custo — |erro| não distingue
+    sinal, então custo_total(fator_sub=1.0) == calcular_custo(...)['custo_total']
+    por construção, não por coincidência numérica. Mesmo escopo de linhas
+    (motivo_exclusao == 'incluida' e CMO disponível) que calcular_custo, para os
+    dois números serem diretamente comparáveis."""
+    incluida_stat = avaliacao[avaliacao["motivo_exclusao"] == "incluida"].copy()
+    incluida_stat["cmo"] = incluida_stat["din_instante"].map(cmo_horario)
+    tem_cmo = incluida_stat["cmo"].notna()
+
+    custo_base = incluida_stat[tem_cmo].copy()
+    custo_base["erro_abs"] = custo_base["erro"].abs()
+    eh_subprevisao = custo_base["erro"] < 0  # previsto < real
+    fator = np.where(eh_subprevisao, fator_sub, 1.0)
+    custo_base["custo"] = custo_base["erro_abs"] * custo_base["cmo"] * fator
+
+    custo_total = float(custo_base["custo"].sum())
+    custo_sub = float(custo_base.loc[eh_subprevisao, "custo"].sum())
+    custo_super = float(custo_base.loc[~eh_subprevisao, "custo"].sum())
+
+    return {
+        "fator_sub": fator_sub,
+        "n_incluida_custo": len(custo_base),
+        "n_horas_sub": int(eh_subprevisao.sum()),
+        "n_horas_super": int((~eh_subprevisao).sum()),
+        "custo_total": custo_total,
+        "custo_subprevisao": custo_sub,
+        "custo_superprevisao": custo_super,
+    }
+
+
+def calcular_vies_direcional(avaliacao: pd.DataFrame, cmo_horario: pd.Series) -> dict:
+    """Viés de direção do erro (ESCOPO.md seção 12f): fração do erro ABSOLUTO
+    total (não do custo, não da contagem de horas) que vem de subprevisão vs.
+    superprevisão. Um modelo bem calibrado deveria ficar perto de 50/50; um viés
+    forte para subprevisão é operacionalmente perigoso mesmo com MAPE bom, porque
+    é exatamente a direção que a seção 12f penaliza mais. Mesmo escopo de linhas
+    (incluida + CMO disponível) que calcular_custo, para comparar com o mesmo
+    denominador usado na métrica de custo."""
+    incluida_stat = avaliacao[avaliacao["motivo_exclusao"] == "incluida"].copy()
+    incluida_stat["cmo"] = incluida_stat["din_instante"].map(cmo_horario)
+    base = incluida_stat[incluida_stat["cmo"].notna()].copy()
+    base["erro_abs"] = base["erro"].abs()
+    eh_subprevisao = base["erro"] < 0
+
+    erro_abs_total = float(base["erro_abs"].sum())
+    erro_abs_sub = float(base.loc[eh_subprevisao, "erro_abs"].sum())
+    erro_abs_super = float(base.loc[~eh_subprevisao, "erro_abs"].sum())
+
+    return {
+        "n_horas_sub": int(eh_subprevisao.sum()),
+        "n_horas_super": int((~eh_subprevisao).sum()),
+        "pct_erro_abs_subprevisao": erro_abs_sub / erro_abs_total * 100 if erro_abs_total else float("nan"),
+        "pct_erro_abs_superprevisao": erro_abs_super / erro_abs_total * 100 if erro_abs_total else float("nan"),
+    }
+
+
 # ---------------------------------------------------------------------------
 def main():
     if not CARGA_SE_PATH.exists():

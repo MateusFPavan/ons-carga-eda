@@ -540,3 +540,55 @@ documentar o contrário, a métrica de custo precisa ser recalculada.
   `zoneinfo`/IANA dentro do próprio `src/gerar_facts.py`
   (função `gerar_timestamps_especiais_dst`), não hardcoded — ver seção D.
 
+---
+
+## L. Custo assimétrico (ESCOPO.md seção 12f)
+
+Única seção deste documento que depende de previsões de modelo já salvas em
+`data/processed/` (via `src/custo_assimetrico.py`), não só de `data/raw/` — as
+seções A-K acima são fatos puros de dado bruto. Subprevisão (previsto < real)
+custa `fator_sub` vezes mais que superprevisão, ao preço marginal (CMO).
+`fator_sub=1.0` é o controle: reproduz o custo simétrico já comprometido em
+`reports/tabela_comparativa.csv` — conferido automaticamente antes desta seção
+ser escrita (o script inteiro aborta se divergir).
+
+### L1. Sensibilidade: custo total por modelo × fator_sub
+
+| Modelo | 1.0× | 1.5× | 2.0× | 3.0× |
+|---|---|---|---|---|
+| naive semanal | R$ 8.52 bi | R$ 10.74 bi | R$ 12.97 bi | R$ 17.43 bi |
+| SARIMA | R$ 8.40 bi | R$ 11.07 bi | R$ 13.73 bi | R$ 19.05 bi |
+| Prophet | R$ 7.86 bi | R$ 10.15 bi | R$ 12.45 bi | R$ 17.03 bi |
+| Chronos-2 | R$ 3.01 bi | R$ 3.86 bi | R$ 4.72 bi | R$ 6.43 bi |
+
+### L2. Viés direcional — % do erro absoluto vindo de sub vs. super
+
+| Modelo | Horas subprevisão | Horas superprevisão | % erro de subprevisão | % erro de superprevisão |
+|---|---|---|---|---|
+| naive semanal | 11168 | 10912 | 49.77% | 50.23% |
+| SARIMA | 12656 | 9424 | 51.81% | 48.19% |
+| Prophet | 11054 | 11026 | 49.53% | 50.47% |
+| Chronos-2 | 11669 | 10411 | 51.83% | 48.17% |
+
+Um modelo bem calibrado fica perto de 50/50. Acima de 50% em subprevisão é o
+viés operacionalmente perigoso — é a direção que o custo assimétrico (L1)
+penaliza mais.
+
+### L3. Robustez do ranking por custo
+
+- `fator_sub=1.0`: Chronos-2 > Prophet > SARIMA > naive semanal (melhor → pior)
+- `fator_sub=1.5`: Chronos-2 > Prophet > naive semanal > SARIMA (melhor → pior)
+- `fator_sub=2.0`: Chronos-2 > Prophet > naive semanal > SARIMA (melhor → pior)
+- `fator_sub=3.0`: Chronos-2 > Prophet > naive semanal > SARIMA (melhor → pior)
+
+**Ranking NÃO robusto:** muda de `fator_sub=1.0` para fatores maiores — os modelos com maior viés de subprevisão (L2) pioram de posição relativa conforme `fator_sub` cresce (ver tabela acima).
+Vencedor em `fator_sub=1.0`: **Chronos-2**. Vencedor em `fator_sub=3.0`: **Chronos-2** — o mesmo modelo, mesmo sob o custo assimétrico mais extremo testado.
+
+**Limitação declarada, não modelada:** VOLL (*Value of Lost Load*, ~US$10.000/MWh
+em mercados como o MISO — ordens de magnitude acima do CMO típico) não entra em
+nenhum fator_sub acima. Aplica-se só às horas de corte de carga efetivo, que este
+dataset não identifica (ESCOPO.md seção 16).
+
+Gráfico: `reports/figures/resultado_8_custo_assimetrico.png`. Tabelas completas:
+`reports/tabela_custo_assimetrico.csv`, `reports/tabela_vies_direcional.csv`.
+

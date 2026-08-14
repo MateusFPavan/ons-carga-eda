@@ -10,6 +10,7 @@ geração, sem qualquer elemento não-determinístico).
 """
 import hashlib
 import json
+import sys
 import zipfile
 from datetime import datetime, timezone
 from io import StringIO
@@ -18,6 +19,8 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 TEMP_DIR = RAW_DIR / "temperatura"
@@ -894,10 +897,27 @@ def secao_k_agregacao_e_fuso() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# L. Custo assimétrico (ESCOPO.md seção 12f) — ÚNICA seção deste arquivo que
+# depende de algo além de data/raw/: lê as previsões já salvas em
+# data/processed/ (src/custo_assimetrico.py). Todas as outras seções (A-K) são
+# fatos puros de dado bruto, recomputáveis sem nenhum modelo já treinado — esta
+# é resultado de avaliação de modelo, não fato de dado. Documentado aqui em vez
+# de reimplementado, para não haver dois cálculos divergentes do mesmo número.
+# ---------------------------------------------------------------------------
+
+def secao_l_custo_assimetrico() -> dict:
+    """Não engole SanityCheckError — se o controle fator_sub=1.0 divergir do custo
+    simétrico já comprometido, é bug real (ESCOPO.md seção 12f) e este script deve
+    parar, igual a qualquer outra divergência contra fatos já estabelecidos."""
+    from custo_assimetrico import calcular_todos
+    return {"disponivel": True, **calcular_todos()}
+
+
+# ---------------------------------------------------------------------------
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, j, j7, k, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -1487,6 +1507,75 @@ def renderizar(a, b, c, d, e, f, g, j, j7, k, timestamps_dst_1519) -> str:
     W("  `zoneinfo`/IANA dentro do próprio `src/gerar_facts.py`")
     W("  (função `gerar_timestamps_especiais_dst`), não hardcoded — ver seção D.")
     W("")
+    W("---")
+    W("")
+
+    # L
+    W("## L. Custo assimétrico (ESCOPO.md seção 12f)")
+    W("")
+    W("Única seção deste documento que depende de previsões de modelo já salvas em")
+    W("`data/processed/` (via `src/custo_assimetrico.py`), não só de `data/raw/` — as")
+    W("seções A-K acima são fatos puros de dado bruto. Subprevisão (previsto < real)")
+    W("custa `fator_sub` vezes mais que superprevisão, ao preço marginal (CMO).")
+    W("`fator_sub=1.0` é o controle: reproduz o custo simétrico já comprometido em")
+    W("`reports/tabela_comparativa.csv` — conferido automaticamente antes desta seção")
+    W("ser escrita (o script inteiro aborta se divergir).")
+    W("")
+    if not l.get("disponivel"):
+        W(f"**Seção não pôde ser calculada:** {l.get('erro', 'motivo desconhecido')}.")
+        W("")
+    else:
+        tc = l["tabela_custo"]
+        tv = l["tabela_vies"]
+        rb = l["robustez"]
+
+        W("### L1. Sensibilidade: custo total por modelo × fator_sub")
+        W("")
+        fatores = sorted(tc["fator_sub"].unique())
+        W("| Modelo | " + " | ".join(f"{f:.1f}×" for f in fatores) + " |")
+        W("|---" * (len(fatores) + 1) + "|")
+        for modelo in tc["modelo"].unique():
+            sub = tc[tc["modelo"] == modelo].set_index("fator_sub")
+            valores = " | ".join(f"R$ {sub.loc[f, 'custo_total']/1e9:,.2f} bi" for f in fatores)
+            W(f"| {modelo} | {valores} |")
+        W("")
+
+        W("### L2. Viés direcional — % do erro absoluto vindo de sub vs. super")
+        W("")
+        W("| Modelo | Horas subprevisão | Horas superprevisão | % erro de subprevisão | % erro de superprevisão |")
+        W("|---|---|---|---|---|")
+        for _, row in tv.iterrows():
+            W(f"| {row['modelo']} | {row['n_horas_sub']} | {row['n_horas_super']} | "
+              f"{row['pct_erro_abs_subprevisao']:.2f}% | {row['pct_erro_abs_superprevisao']:.2f}% |")
+        W("")
+        W("Um modelo bem calibrado fica perto de 50/50. Acima de 50% em subprevisão é o")
+        W("viés operacionalmente perigoso — é a direção que o custo assimétrico (L1)")
+        W("penaliza mais.")
+        W("")
+
+        W("### L3. Robustez do ranking por custo")
+        W("")
+        for fator in fatores:
+            W(f"- `fator_sub={fator}`: {' > '.join(rb['rankings'][fator])} (melhor → pior)")
+        W("")
+        if rb["robusto"]:
+            W("**Ranking robusto:** idêntico em todos os fatores testados.")
+        else:
+            W(f"**Ranking NÃO robusto:** muda de `fator_sub=1.0` para fatores maiores — "
+              f"os modelos com maior viés de subprevisão (L2) pioram de posição relativa "
+              f"conforme `fator_sub` cresce (ver tabela acima).")
+        W(f"Vencedor em `fator_sub=1.0`: **{rb['vencedor_base']}**. Vencedor em "
+          f"`fator_sub={fatores[-1]}`: **{rb['vencedor_maior_fator']}** — "
+          f"{'o mesmo modelo, mesmo sob o custo assimétrico mais extremo testado.' if rb['vencedor_base'] == rb['vencedor_maior_fator'] else 'a liderança muda.'}")
+        W("")
+        W("**Limitação declarada, não modelada:** VOLL (*Value of Lost Load*, ~US$10.000/MWh")
+        W("em mercados como o MISO — ordens de magnitude acima do CMO típico) não entra em")
+        W("nenhum fator_sub acima. Aplica-se só às horas de corte de carga efetivo, que este")
+        W("dataset não identifica (ESCOPO.md seção 16).")
+        W("")
+        W("Gráfico: `reports/figures/resultado_8_custo_assimetrico.png`. Tabelas completas:")
+        W("`reports/tabela_custo_assimetrico.csv`, `reports/tabela_vies_direcional.csv`.")
+        W("")
 
     return "\n".join(linhas) + "\n"
 
@@ -1511,8 +1600,10 @@ def main():
     j = secao_j_custo(c)
     j7 = secao_j7_cobertura_anual_cmo()
     k = secao_k_agregacao_e_fuso()
+    print("Calculando seção L (custo assimétrico) — lê previsões salvas, ~30-60s...")
+    l = secao_l_custo_assimetrico()
 
-    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")
