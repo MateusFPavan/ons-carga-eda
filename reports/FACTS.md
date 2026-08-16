@@ -601,3 +601,31 @@ dataset não identifica (ESCOPO.md seção 16).
 Gráfico: `reports/figures/resultado_8_custo_assimetrico.png`. Tabelas completas:
 `reports/tabela_custo_assimetrico.csv`, `reports/tabela_vies_direcional.csv`.
 
+---
+
+## M. Tratamento por coluna
+
+Tabela de auditoria (não computada — descreve o código, como a seção H). Toda
+coluna efetivamente usada no pipeline, o tratamento aplicado e onde no código.
+
+| Coluna | Tipo bruto | Tratamento aplicado | Onde no código |
+|---|---|---|---|
+| val_cargaenergiahomwmed (carga) | texto (2015-2024) / float64 (2025-2026) | Coerção para float64 com checagem de round-trip via Decimal (sem perda de precisão); NaN mantido, nunca imputado | src/limpar.py: carregar_se(), verificar_roundtrip_string() |
+| val_cmo (CMO) | float64 (2024-2025) / texto (2026) | pd.to_numeric coerção explícita e incondicional (não confia no dtype de origem, que já divergiu antes) | src/modelo_naive.py: carregar_cmo_horario_se() |
+| temperature_2m_previous_day1 (5 cidades) | float (JSON Open-Meteo) | previous_day1 (previsão feita 1 dia antes, leak-safe), NUNCA temperature_2m observada; reindex por timestamp | src/prophet_temperatura_completo.py: carregar_temperatura_cidade() |
+| din_instante (timestamp) | datetime, tz-naive no parquet de origem | Tratado como hora local America/Sao_Paulo, SEM conversão para UTC (fato derivado, FACTS.md seção K3) | src/limpar.py: main() |
+| is_dst_transition | bool derivado do timestamp | Gerado via zoneinfo/IANA (fold=0 vs fold=1), nenhuma data hardcoded; as 9 horas ficam excluídas como origem de previsão | src/limpar.py: gerar_timestamps_dst(); src/gerar_facts.py: gerar_timestamps_especiais_dst() |
+| dst_ativo | bool derivado do timestamp | Via zoneinfo/IANA, fold=0 (interpretação padrão) nos timestamps ambíguos/inexistentes | src/gerar_features.py: calcular_dst_ativo() |
+| is_feriado | bool derivado do timestamp | biblioteca holidays.Brazil(years=...), sem subdiv = só feriados nacionais (nenhum estadual/municipal) | src/gerar_features.py: calcular_is_feriado() |
+| hora, dia_semana, mes, dia_ano, is_fim_de_semana | int/bool derivado do timestamp | Função pura do timestamp — sem consulta a nenhum dado histórico, não pode vazar | src/gerar_features.py: calcular_features_calendario() |
+| hora_sin/cos, dia_semana_sin/cos, dia_ano_sin/cos | float, codificação cíclica | Seno/cosseno para evitar a descontinuidade artificial 23h→0h de uma codificação linear | src/gerar_features.py: calcular_features_calendario() |
+| lag_24h/48h/168h/336h | float, deslocamento da carga | Shift por TEMPO (asfreq), não por posição de linha — continua correto sobre um recorte com lacunas (teste de vazamento) | src/gerar_features.py: calcular_lags() |
+| media_24h/168h/mesma_hora_7d | float, média móvel da carga | Corte explícito em D-1 (day-ahead); reamostrado para calendário diário completo antes do shift/rolling | src/gerar_features.py: calcular_medias_moveis() |
+
+**Pontos de decisão não-óbvia — comentário no código confirmado (auditoria):**
+
+- Coerção texto→float (carga e CMO): comentário presente há várias sessões (round-trip via Decimal em limpar.py; cast incondicional em modelo_naive.py).
+- Exclusão dos 9 timestamps de transição de DST: comentário presente (limpar.py, gerar_facts.py, gerar_features.py) — gerados por zoneinfo, não hardcoded, e o motivo da exclusão está explícito.
+- Alinhamento de fuso do CMO (hora local, não UTC): comentário presente em modelo_naive.py e limpar.py, remetendo ao fato derivado da seção K3.
+- Uso de temperatura PREVISÃO (previous_day1) vs. OBSERVAÇÃO: NÃO tinha comentário no código até a auditoria anterior (só constava em docs/DATA_CARD.md) — comentário adicionado em carregar_temperatura_cidade() (commit 72b9e08).
+
