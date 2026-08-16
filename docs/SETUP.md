@@ -62,9 +62,9 @@ On Windows set these with `set VAR=1` before the run. Single-threading matters: 
 `run_all.py` is staged so that **reproducing the result is cheap and retraining is optional** — the professional pattern (cache intermediate artefacts; do not recompute hours of training to redraw a chart). Saved predictions live in `data/processed/`, so the comparison table and charts regenerate in seconds.
 
 ```bash
-python run_all.py                     # DEFAULT (all-fast): data + results, ~1 min
-python run_all.py --stage data        # data pipeline only, ~54 s
-python run_all.py --stage results     # recompute tables + charts from SAVED predictions, ~14 s
+python run_all.py                     # DEFAULT (all-fast): data + results, ~1.5 min
+python run_all.py --stage data        # data pipeline only, ~60 s
+python run_all.py --stage results     # recompute tables + charts from SAVED predictions, ~29 s
 python run_all.py --stage models --yes # RETRAIN all 4 models (~4 h) — optional
 python run_all.py --help              # lists every stage with its cost
 ```
@@ -72,7 +72,7 @@ python run_all.py --help              # lists every stage with its cost
 - **`data`** runs, in fixed order, aborting the whole chain on any failure or hash mismatch: (1) verify MANIFEST (SHA-256 + size vs `MANIFEST.json`); (2) `gerar_facts.py` → `reports/FACTS.md`; (3) `verificar_facts.py` (independent recomputation, nonzero exit on divergence); (4) `limpar.py` → cleaned SE/CO; (5) `gerar_features.py` (features + leakage self-test).
 - **`results`** does **not** retrain: it reads the saved predictions, recomputes every metric (including an asymmetric-cost sensitivity sweep — subprevisão penalized more than superprevisão, `src/custo_assimetrico.py`), writes `reports/tabela_comparativa.csv` and `reports/tabela_custo_assimetrico.csv`/`tabela_vies_direcional.csv`, regenerates the 8 charts in `reports/figures/`, and **hard-stops if any metric diverges from already-committed numbers** (`FACTS.md`, or — for the asymmetric-cost control case (`fator_sub=1.0`) — the existing symmetric cost). If a single model's prediction file is missing, it skips that model with a warning rather than aborting.
 - **`models`** retrains all four; it **refuses to run without `--yes`** (or interactive `sim`) so 4 h of training is never triggered by accident. Determinism forced (`seed=42`, single-thread).
-- **`all-fast`** (default) = `data` + `results`, ~1 min — this is what a reviewer runs to reproduce the result without retraining.
+- **`all-fast`** (default) = `data` + `results`, ~1.5 min — this is what a reviewer runs to reproduce the result without retraining.
 
 **Temporal split (critical):** the evaluation is **walk-forward, day-ahead, sliding origin, over 2024-01-01+ — never shuffled.** Each forecast uses only history prior to its origin. A reviewer who shuffles will not reproduce these boundaries and will leak the future.
 
@@ -95,7 +95,7 @@ A correct Chronos-2 run reproduces MASE **0.4363** / MAPE **1.8235%** / P05–P9
 
 ## 7. Runtime & resources
 
-`python run_all.py` (default, reproduces the result): **~1 min**. `--stage data`: ~54 s. `--stage results`: ~11 s. `--stage models` (retrain, optional): **~4 h** (Prophet ~3 h Stan fit per origin; SARIMA ~80 min; Chronos-2 ~10 min). All CPU-only; peak RAM for `python run_all.py` (default, measured with `psutil` across the whole process tree — `run_all.py` spawns each stage as a subprocess): **~306 MiB**. This is the `data`+`results` figure; `--stage models` (loading Chronos-2/torch, fitting Prophet/SARIMA) was not measured here and will be higher.
+`python run_all.py` (default, reproduces the result): **~1.5 min**. `--stage data`: ~60 s. `--stage results`: ~29 s (table/chart regeneration, plus the asymmetric-cost, error-breakdown, and contamination-window sensitivity analyses, all recomputed from saved predictions). `--stage models` (retrain, optional): **~4 h** (Prophet ~3 h Stan fit per origin; SARIMA ~80 min; Chronos-2 ~10 min). All CPU-only; peak RAM for `python run_all.py` (default, measured with `psutil` across the whole process tree — `run_all.py` spawns each stage as a subprocess): **~306 MiB** (measured before the seções L/N/O additions; order-of-magnitude estimate still holds). This is the `data`+`results` figure; `--stage models` (loading Chronos-2/torch, fitting Prophet/SARIMA) was not measured here and will be higher.
 
 ## 8. Troubleshooting
 
@@ -123,7 +123,7 @@ Everything else (unused imports, undefined names, basic pycodestyle) is enforced
 
 - **Pinned deps + install:** present (§2).
 - **Data access:** present (§3), including the five fetch scripts by name.
-- **Exact reproduce commands, ordered:** `run_all.py` fully specified with staged modes (§5); default reproduces the result in ~1 min from saved predictions, `--stage models` retrains. No reproducibility `[TODO]` remains.
+- **Exact reproduce commands, ordered:** `run_all.py` fully specified with staged modes (§5); default reproduces the result in ~1.5 min from saved predictions, `--stage models` retrains. No reproducibility `[TODO]` remains.
 - **Expected results & seeds/run count:** present (§6).
 - **Relative paths / no committed secrets:** present (§3, §4).
 - **Code quality:** ruff configured and run (§9).

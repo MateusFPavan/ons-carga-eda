@@ -411,15 +411,22 @@ ERA5-vs-estação não são somáveis nem diretamente comparáveis.
   horas específicas em mais de 10% cada — a métrica de custo em nível de hora
   individual é sensível a essa escolha, mesmo que o total anual não seja (seção
   12b).
-- Contaminação de pré-treino do Chronos-2 não pode ser descartada nem confirmada: o
-  relatório técnico do modelo (arXiv:2510.15821, Tabela 6) documenta datasets do
-  domínio de energia/eletricidade no corpus de pré-treino (Electricity, London Smart
-  Meters, Buildings 900K, Solar, Wind Farms), mas não menciona nenhuma fonte
-  brasileira ou do ONS — a ausência de menção não é prova de ausência, só de não
-  documentação. Auditar por completo o corpus de pré-treino de um foundation model
-  de terceiros não é possível a partir daqui; isso é uma limitação inerente a
-  qualquer avaliação zero-shot desse tipo de modelo sobre séries públicas, não
-  específica deste projeto.
+- Contaminação de pré-treino do Chronos-2 não pode ser descartada por completo,
+  mas foi PARCIALMENTE atacada (FACTS.md seção O): recomputando o resultado só na
+  janela de origens posteriores ao release do checkpoint (proxy conservadora para
+  o corte do corpus, já que a data exata não é pública), o Chronos-2 continua
+  vencendo por MASE(sazonal) com margem grande sobre os outros 3 modelos — a
+  vantagem não depende de ter memorizado ESTAS horas específicas (carga SE/CO).
+  Isso NÃO descarta contaminação por padrões GENÉRICOS de energia/eletricidade no
+  corpus de pré-treino: o relatório técnico do modelo (arXiv:2510.15821, Tabela 6)
+  documenta datasets do domínio (Electricity, London Smart Meters, Buildings 900K,
+  Solar, Wind Farms), mas não menciona nenhuma fonte brasileira ou do ONS — a
+  ausência de menção não é prova de ausência, só de não documentação, e essa forma
+  de contaminação (aprender padrões estruturais de carga por analogia, não
+  memorizar os dados exatos) não é testável a partir daqui. Auditar por completo o
+  corpus de pré-treino de um foundation model de terceiros não é possível; isso é
+  uma limitação inerente a qualquer avaliação zero-shot desse tipo de modelo sobre
+  séries públicas, não específica deste projeto.
 - O projeto prevê CARGA (demanda), não despacho (oferta). A restrição operacional
   real — "oferta nunca pode ficar abaixo da demanda", sob pena de corte de carga no
   extremo — é responsabilidade do operador do sistema, não do modelo de previsão;

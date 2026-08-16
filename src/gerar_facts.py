@@ -978,11 +978,16 @@ def secao_n_breakdown_erro() -> dict:
     return {"disponivel": True, **calcular_todos()}
 
 
+def secao_o_teste_contaminacao() -> dict:
+    from teste_contaminacao import calcular_todos
+    return {"disponivel": True, **calcular_todos()}
+
+
 # ---------------------------------------------------------------------------
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, o, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -1709,6 +1714,59 @@ def renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, timestamps_dst_1519) -> str:
         W("Gráfico: `reports/figures/resultado_9_erro_por_estacao.png`. Tabela completa:")
         W("`reports/tabela_breakdown_erro.csv`.")
         W("")
+    W("---")
+    W("")
+
+    # O
+    W("## O. Teste de contaminação: janela pós-cutoff de pré-treino")
+    W("")
+    W("Chronos-2 (`amazon/chronos-2`) não publica uma data de corte exata do corpus de")
+    W("pré-treino (verificado: arXiv:2510.15821, model card, discussão #450 do repo")
+    W("`amazon-science/chronos-forecasting` — nenhum menciona uma data explícita).")
+    W("**Proxy conservadora, declarada, não inventada:** a data de release do checkpoint")
+    W("no Hugging Face — o modelo já estava treinado quando publicado, então qualquer")
+    W("origem estritamente posterior ao release é garantidamente posterior ao corte real,")
+    W("não importa qual seja. Recomputado das previsões já salvas (`src/teste_contaminacao.py`),")
+    W("mesma fonte de avaliação das seções L/N — não re-treina nada.")
+    W("")
+    if not o.get("disponivel"):
+        W(f"**Seção não pôde ser calculada:** {o.get('erro', 'motivo desconhecido')}.")
+        W("")
+    else:
+        W(f"**Cutoff usado:** `{o['cutoff'].date()}` (release do checkpoint `amazon/chronos-2` no")
+        W("Hugging Face, dias após o artigo técnico arXiv:2510.15821 de 2025-10-17).")
+        W("")
+        W("| Modelo | Janela | Origens | Horas | MAPE | MASE (1passo) | MASE (sazonal) | Custo total |")
+        W("|---|---|---|---|---|---|---|---|")
+        for _, row in o["tabela"].iterrows():
+            W(f"| {row['modelo']} | {row['janela']} | {row['n_origens']} | {row['n_horas']} | "
+              f"{row['mape']:.4f}% | {row['mase_1passo']:.4f} | {row['mase_sazonal']:.4f} | "
+              f"R$ {row['custo_total']:,.2f} |")
+        W("")
+
+        tabela_o = o["tabela"]
+        pos = tabela_o[tabela_o["janela"].str.startswith("pós-cutoff")]
+        completo = tabela_o[tabela_o["janela"].str.startswith("período completo")]
+        vencedor_pos = pos.loc[pos["mase_sazonal"].idxmin(), "modelo"]
+        vencedor_completo = completo.loc[completo["mase_sazonal"].idxmin(), "modelo"]
+        mase_c = float(completo[completo["modelo"] == "Chronos-2"]["mase_sazonal"].iloc[0])
+        mase_p = float(pos[pos["modelo"] == "Chronos-2"]["mase_sazonal"].iloc[0])
+
+        W(f"**Vencedor por MASE(sazonal) no período completo:** {vencedor_completo}. "
+          f"**Vencedor na janela pós-cutoff:** {vencedor_pos} "
+          f"({'mesmo modelo' if vencedor_pos == vencedor_completo else 'MUDA — investigar'}).")
+        W(f"Chronos-2 MASE(sazonal): {mase_c:.4f} (completo) → {mase_p:.4f} (pós-cutoff), "
+          f"{'piora' if mase_p > mase_c else 'melhora ou mantém'} mas continua o menor entre os 4 modelos.")
+        W("")
+        W("**O que este teste prova, com precisão — não mais do que isso:** se o Chronos-2")
+        W("continua vencendo na janela pós-cutoff (como aconteceu aqui), a vantagem do modelo")
+        W("não depende de ter memorizado ESTAS horas específicas (carga SE/CO, 2015-2026) no")
+        W("pré-treino, já que elas são posteriores ao corte real do corpus. **Isto NÃO descarta**")
+        W("contaminação por padrões GENÉRICOS de energia/eletricidade no corpus de pré-treino")
+        W("(Electricity, London Smart Meters, Buildings 900K, Solar, Wind Farms — arXiv:2510.15821")
+        W("Tabela 6, já documentado em ESCOPO.md seção 16) — essa forma de contaminação não é")
+        W("testável a partir daqui, e este teste não afirma tê-la descartado.")
+        W("")
 
     return "\n".join(linhas) + "\n"
 
@@ -1737,8 +1795,10 @@ def main():
     l = secao_l_custo_assimetrico()
     print("Calculando seção N (breakdown de erro) — lê previsões salvas, ~10-20s...")
     n = secao_n_breakdown_erro()
+    print("Calculando seção O (teste de contaminação) — lê previsões salvas, ~10-20s...")
+    o = secao_o_teste_contaminacao()
 
-    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, o, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")

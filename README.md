@@ -57,7 +57,7 @@ git clone https://github.com/MateusFPavan/ons-carga-eda.git && cd ons-carga-eda
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-python run_all.py            # reproduces the result in ~1 min from saved predictions
+python run_all.py            # reproduces the result in ~1.5 min from saved predictions
 python run_all.py --help     # all stages and their cost
 ```
 

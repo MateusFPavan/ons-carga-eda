@@ -697,3 +697,42 @@ dia útil para fim de semana (~4,33% para ~9,08%), padrão não observado nos ou
 Gráfico: `reports/figures/resultado_9_erro_por_estacao.png`. Tabela completa:
 `reports/tabela_breakdown_erro.csv`.
 
+---
+
+## O. Teste de contaminação: janela pós-cutoff de pré-treino
+
+Chronos-2 (`amazon/chronos-2`) não publica uma data de corte exata do corpus de
+pré-treino (verificado: arXiv:2510.15821, model card, discussão #450 do repo
+`amazon-science/chronos-forecasting` — nenhum menciona uma data explícita).
+**Proxy conservadora, declarada, não inventada:** a data de release do checkpoint
+no Hugging Face — o modelo já estava treinado quando publicado, então qualquer
+origem estritamente posterior ao release é garantidamente posterior ao corte real,
+não importa qual seja. Recomputado das previsões já salvas (`src/teste_contaminacao.py`),
+mesma fonte de avaliação das seções L/N — não re-treina nada.
+
+**Cutoff usado:** `2025-10-20` (release do checkpoint `amazon/chronos-2` no
+Hugging Face, dias após o artigo técnico arXiv:2510.15821 de 2025-10-17).
+
+| Modelo | Janela | Origens | Horas | MAPE | MASE (1passo) | MASE (sazonal) | Custo total |
+|---|---|---|---|---|---|---|---|
+| naive semanal | período completo (2024-01-01+) | 927 | 22248 | 5.3727% | 1.9482 | 1.2732 | R$ 8,515,852,974.95 |
+| naive semanal | pós-cutoff (2025-10-20+) | 268 | 6432 | 5.7547% | 2.0844 | 1.3622 | R$ 3,721,094,571.41 |
+| SARIMA | período completo (2024-01-01+) | 927 | 22248 | 5.6805% | 2.0523 | 1.3412 | R$ 8,403,964,892.57 |
+| SARIMA | pós-cutoff (2025-10-20+) | 268 | 6432 | 5.7801% | 2.0912 | 1.3667 | R$ 3,302,509,186.50 |
+| Prophet | período completo (2024-01-01+) | 927 | 22248 | 4.9947% | 1.7856 | 1.1669 | R$ 7,858,945,781.45 |
+| Prophet | pós-cutoff (2025-10-20+) | 268 | 6432 | 5.1385% | 1.8279 | 1.1946 | R$ 3,204,062,466.17 |
+| Chronos-2 | período completo (2024-01-01+) | 927 | 22248 | 1.8235% | 0.6676 | 0.4363 | R$ 3,006,870,002.48 |
+| Chronos-2 | pós-cutoff (2025-10-20+) | 268 | 6432 | 2.0498% | 0.7490 | 0.4895 | R$ 1,299,991,969.84 |
+
+**Vencedor por MASE(sazonal) no período completo:** Chronos-2. **Vencedor na janela pós-cutoff:** Chronos-2 (mesmo modelo).
+Chronos-2 MASE(sazonal): 0.4363 (completo) → 0.4895 (pós-cutoff), piora mas continua o menor entre os 4 modelos.
+
+**O que este teste prova, com precisão — não mais do que isso:** se o Chronos-2
+continua vencendo na janela pós-cutoff (como aconteceu aqui), a vantagem do modelo
+não depende de ter memorizado ESTAS horas específicas (carga SE/CO, 2015-2026) no
+pré-treino, já que elas são posteriores ao corte real do corpus. **Isto NÃO descarta**
+contaminação por padrões GENÉRICOS de energia/eletricidade no corpus de pré-treino
+(Electricity, London Smart Meters, Buildings 900K, Solar, Wind Farms — arXiv:2510.15821
+Tabela 6, já documentado em ESCOPO.md seção 16) — essa forma de contaminação não é
+testável a partir daqui, e este teste não afirma tê-la descartado.
+

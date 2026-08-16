@@ -112,6 +112,7 @@ RESULTS_ETAPAS = [
     ("Tabela comparativa + gráficos (plot_resultados.py)", etapa_rodar_script("plot_resultados.py")),
     ("Custo assimétrico + viés direcional (custo_assimetrico.py)", etapa_rodar_script("custo_assimetrico.py")),
     ("Breakdown de erro por subgrupo (breakdown_erro.py)", etapa_rodar_script("breakdown_erro.py")),
+    ("Teste de contaminação: janela pós-cutoff (teste_contaminacao.py)", etapa_rodar_script("teste_contaminacao.py")),
 ]
 
 # ordem: naive é instantâneo, SARIMA/Chronos são baratos perto do Prophet — rodar
