@@ -954,12 +954,12 @@ def secao_k_agregacao_e_fuso() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# L. Custo assimétrico (ESCOPO.md seção 12f) — ÚNICA seção deste arquivo que
-# depende de algo além de data/raw/: lê as previsões já salvas em
-# data/processed/ (src/custo_assimetrico.py). Todas as outras seções (A-K) são
-# fatos puros de dado bruto, recomputáveis sem nenhum modelo já treinado — esta
-# é resultado de avaliação de modelo, não fato de dado. Documentado aqui em vez
-# de reimplementado, para não haver dois cálculos divergentes do mesmo número.
+# L, N. Únicas seções deste arquivo que dependem de algo além de data/raw/: leem
+# as previsões já salvas em data/processed/ (src/custo_assimetrico.py,
+# src/breakdown_erro.py). As seções A-K, M são fatos puros de dado bruto (ou
+# descrição de código, M), recomputáveis sem nenhum modelo já treinado — L e N
+# são resultado de avaliação de modelo. Documentado aqui em vez de
+# reimplementado, para não haver dois cálculos divergentes do mesmo número.
 # ---------------------------------------------------------------------------
 
 def secao_l_custo_assimetrico() -> dict:
@@ -970,11 +970,19 @@ def secao_l_custo_assimetrico() -> dict:
     return {"disponivel": True, **calcular_todos()}
 
 
+def secao_n_breakdown_erro() -> dict:
+    """Não engole SanityCheckError — se a soma de horas por subgrupo não bater
+    com n_incluida do modelo, é sinal de merge quebrado com features_se.parquet,
+    não algo para silenciar."""
+    from breakdown_erro import calcular_todos
+    return {"disponivel": True, **calcular_todos()}
+
+
 # ---------------------------------------------------------------------------
 # Renderização em Markdown
 # ---------------------------------------------------------------------------
 
-def renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519) -> str:
+def renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, timestamps_dst_1519) -> str:
     linhas = []
     W = linhas.append
 
@@ -1662,6 +1670,45 @@ def renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519) -> str:
     for item in COMENTARIOS_AUDITADOS:
         W(f"- {item}")
     W("")
+    W("---")
+    W("")
+
+    # N
+    W("## N. Breakdown de erro por subgrupo")
+    W("")
+    W("Recomputado das previsões já salvas (`src/breakdown_erro.py`), mesma fonte de")
+    W("avaliação da seção L. Controle: a soma de horas por subgrupo bate com o total")
+    W("de horas incluídas de cada modelo nas 3 estratificações — conferido antes desta")
+    W("seção ser escrita (o script inteiro aborta se não bater).")
+    W("")
+    if not n.get("disponivel"):
+        W(f"**Seção não pôde ser calculada:** {n.get('erro', 'motivo desconhecido')}.")
+        W("")
+    else:
+        for titulo, chave in [("N1. Feriado vs. dia normal", "tabela_feriado"),
+                               ("N2. Estação do ano (hemisfério sul)", "tabela_estacao"),
+                               ("N3. Dia útil vs. fim de semana", "tabela_dia")]:
+            tabela_n = n[chave]
+            W(f"### {titulo}")
+            W("")
+            W("| Modelo | Categoria | Horas | MAPE | Custo total |")
+            W("|---|---|---|---|---|")
+            for _, row in tabela_n.iterrows():
+                W(f"| {row['modelo']} | {row['categoria']} | {row['n_horas']} | "
+                  f"{row['mape']:.4f}% | R$ {row['custo_total']:,.2f} |")
+            W("")
+        W("**Chronos-2 mantém a vantagem (menor MAPE) em TODOS os subgrupos testados** — nenhum")
+        W("corte (feriado/normal, cada estação, dia útil/fim de semana) inverte o ranking.")
+        W("Mas a degradação RELATIVA não é uniforme: o salto de MAPE em feriados é o maior")
+        W("dos 4 modelos em termos proporcionais (Chronos-2 vai de ~1,68% para ~7,09% —")
+        W("mais que 4×, o maior fator de degradação relativa entre os quatro, mesmo vencendo")
+        W("em termos absolutos). SARIMA mostra uma anomalia própria: MAPE mais que dobra de")
+        W("dia útil para fim de semana (~4,33% para ~9,08%), padrão não observado nos outros")
+        W("3 modelos.")
+        W("")
+        W("Gráfico: `reports/figures/resultado_9_erro_por_estacao.png`. Tabela completa:")
+        W("`reports/tabela_breakdown_erro.csv`.")
+        W("")
 
     return "\n".join(linhas) + "\n"
 
@@ -1688,8 +1735,10 @@ def main():
     k = secao_k_agregacao_e_fuso()
     print("Calculando seção L (custo assimétrico) — lê previsões salvas, ~30-60s...")
     l = secao_l_custo_assimetrico()
+    print("Calculando seção N (breakdown de erro) — lê previsões salvas, ~10-20s...")
+    n = secao_n_breakdown_erro()
 
-    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519)
+    conteudo = renderizar(a, b, c, d, e, f, g, j, j7, k, l, n, timestamps_dst_1519)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     (REPORTS_DIR / "FACTS.md").write_text(conteudo, encoding="utf-8", newline="\n")
     print(f"Escrito: {REPORTS_DIR / 'FACTS.md'} ({len(conteudo)} caracteres)")

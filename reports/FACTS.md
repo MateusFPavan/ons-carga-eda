@@ -629,3 +629,71 @@ coluna efetivamente usada no pipeline, o tratamento aplicado e onde no código.
 - Alinhamento de fuso do CMO (hora local, não UTC): comentário presente em modelo_naive.py e limpar.py, remetendo ao fato derivado da seção K3.
 - Uso de temperatura PREVISÃO (previous_day1) vs. OBSERVAÇÃO: NÃO tinha comentário no código até a auditoria anterior (só constava em docs/DATA_CARD.md) — comentário adicionado em carregar_temperatura_cidade() (commit 72b9e08).
 
+---
+
+## N. Breakdown de erro por subgrupo
+
+Recomputado das previsões já salvas (`src/breakdown_erro.py`), mesma fonte de
+avaliação da seção L. Controle: a soma de horas por subgrupo bate com o total
+de horas incluídas de cada modelo nas 3 estratificações — conferido antes desta
+seção ser escrita (o script inteiro aborta se não bater).
+
+### N1. Feriado vs. dia normal
+
+| Modelo | Categoria | Horas | MAPE | Custo total |
+|---|---|---|---|---|
+| naive semanal | dia normal | 21672 | 5.2461% | R$ 8,293,747,526.62 |
+| naive semanal | feriado | 576 | 10.1384% | R$ 222,105,448.33 |
+| SARIMA | dia normal | 21672 | 5.5873% | R$ 8,134,776,470.38 |
+| SARIMA | feriado | 576 | 9.1894% | R$ 269,188,422.19 |
+| Prophet | dia normal | 21672 | 4.8984% | R$ 7,599,010,562.55 |
+| Prophet | feriado | 576 | 8.6180% | R$ 259,935,218.90 |
+| Chronos-2 | dia normal | 21672 | 1.6835% | R$ 2,863,846,704.37 |
+| Chronos-2 | feriado | 576 | 7.0907% | R$ 143,023,298.11 |
+
+### N2. Estação do ano (hemisfério sul)
+
+| Modelo | Categoria | Horas | MAPE | Custo total |
+|---|---|---|---|---|
+| naive semanal | inverno | 5496 | 4.1080% | R$ 1,378,441,178.20 |
+| naive semanal | outono | 6624 | 5.7251% | R$ 2,353,233,047.65 |
+| naive semanal | primavera | 4368 | 5.2363% | R$ 2,911,502,317.28 |
+| naive semanal | verão | 5760 | 6.2777% | R$ 1,872,676,431.82 |
+| SARIMA | inverno | 5496 | 5.4465% | R$ 1,615,299,715.47 |
+| SARIMA | outono | 6624 | 5.8987% | R$ 2,164,599,108.79 |
+| SARIMA | primavera | 4368 | 5.8775% | R$ 3,092,536,420.23 |
+| SARIMA | verão | 5760 | 5.5036% | R$ 1,531,529,648.07 |
+| Prophet | inverno | 5496 | 4.4845% | R$ 1,486,731,620.76 |
+| Prophet | outono | 6624 | 5.0151% | R$ 2,015,844,281.62 |
+| Prophet | primavera | 4368 | 5.1609% | R$ 2,792,371,810.75 |
+| Prophet | verão | 5760 | 5.3322% | R$ 1,563,998,068.32 |
+| Chronos-2 | inverno | 5496 | 1.4836% | R$ 494,967,598.58 |
+| Chronos-2 | outono | 6624 | 1.9263% | R$ 801,207,587.36 |
+| Chronos-2 | primavera | 4368 | 1.9049% | R$ 1,112,296,684.47 |
+| Chronos-2 | verão | 5760 | 1.9678% | R$ 598,398,132.07 |
+
+### N3. Dia útil vs. fim de semana
+
+| Modelo | Categoria | Horas | MAPE | Custo total |
+|---|---|---|---|---|
+| naive semanal | dia útil | 15912 | 5.5728% | R$ 6,940,566,658.93 |
+| naive semanal | fim de semana | 6336 | 4.8702% | R$ 1,575,286,316.03 |
+| SARIMA | dia útil | 15912 | 4.3277% | R$ 5,954,763,510.62 |
+| SARIMA | fim de semana | 6336 | 9.0780% | R$ 2,449,201,381.95 |
+| Prophet | dia útil | 15912 | 4.6147% | R$ 5,833,198,448.54 |
+| Prophet | fim de semana | 6336 | 5.9491% | R$ 2,025,747,332.91 |
+| Chronos-2 | dia útil | 15912 | 1.8474% | R$ 2,394,926,288.52 |
+| Chronos-2 | fim de semana | 6336 | 1.7633% | R$ 611,943,713.96 |
+
+**Chronos-2 mantém a vantagem (menor MAPE) em TODOS os subgrupos testados** — nenhum
+corte (feriado/normal, cada estação, dia útil/fim de semana) inverte o ranking.
+Mas a degradação RELATIVA não é uniforme: o salto de MAPE em feriados é o maior
+dos 4 modelos em termos proporcionais (Chronos-2 vai de ~1,68% para ~7,09% —
+mais que 4×, o maior fator de degradação relativa entre os quatro, mesmo vencendo
+em termos absolutos). SARIMA mostra uma anomalia própria: MAPE mais que dobra de
+dia útil para fim de semana (~4,33% para ~9,08%), padrão não observado nos outros
+3 modelos.
+
+Gráfico: `reports/figures/resultado_9_erro_por_estacao.png`. Tabela completa:
+`reports/tabela_breakdown_erro.csv`.
+
