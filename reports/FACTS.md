@@ -413,6 +413,15 @@ anos abaixo cobrem a faixa que o **portal do ONS declara disponível**
 | 2025 | presente (ano completo) | 17472 | `2025-01-01 00:00:00` a `2025-12-31 23:30:00` | 1 | 0 | 3 | 1370 | -0.0800 | 2151.7000 |
 | 2026 | presente (parcial (em andamento)) | 9552 | `2026-01-01 00:00:00` a `2026-07-20 23:30:00` | 2 | 0 | 0 | 938 | 0.0000 | 4870.9400 |
 
+Cobertura em base HORÁRIA (dias × 24h — granularidade que o projeto de fato usa,
+`carregar_cmo_horario_se` agrega 30min→60min) e média do CMO, para os anos presentes:
+
+| Ano | Horas existentes | Horas esperadas | % cobertura horária | Média (R$/MWh) |
+|---|---|---|---|---|
+| 2024 | 8688 | 8784 | 98.9071% | 107.5531 |
+| 2025 | 8736 | 8760 | 99.7260% | 216.0467 |
+| 2026 | 4776 | 4824 | 99.0050% | 231.4942 |
+
 **4 ano(s) sem arquivo baixado: 2020, 2021, 2022, 2023.** Não é uma lacuna do projeto — o período de avaliação (`INICIO_AVALIACAO` = 2024-01-01) nunca precisou desses anos, então eles nunca foram baixados. A
 cobertura 2020-2026 citada nos documentos é a listagem do portal (o que **pode**
 ser baixado), não uma verificação de que os dados de 2020-2023 estão completos —

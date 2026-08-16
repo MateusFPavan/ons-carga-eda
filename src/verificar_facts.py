@@ -221,7 +221,7 @@ def main():
 
     print("\n=== J7. cobertura ano a ano do CMO Semi-Horário (recomputo independente, 2020-2026) ===")
     idx_j7 = texto.find("J7. Cobertura ano a ano")
-    trecho_j7 = texto[idx_j7:idx_j7 + 3000] if idx_j7 != -1 else ""
+    trecho_j7 = texto[idx_j7:idx_j7 + 4000] if idx_j7 != -1 else ""
     for ano in range(2020, 2027):
         fpath_ano = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
         linha_facts = next((l for l in trecho_j7.splitlines() if l.startswith(f"| {ano} |")), None)
@@ -264,6 +264,26 @@ def main():
         calendario_ano = set(pd.date_range(f"{ano}-01-01", ultimo.normalize(), freq="D").date)
         ausentes_real = sorted(str(d) for d in (calendario_ano - dias_presentes))
         checar(f"CMO {ano} dias ausentes (lista)", ausentes_real, buracos_facts.get(ano, []))
+
+    print("\n=== J7. cobertura horária e média (recomputo independente, 2024-2026) ===")
+    for ano in (2024, 2025, 2026):
+        fpath_ano = CUSTO_DIR / f"cmo_semi_horario_{ano}.parquet"
+        linha_horaria = next((l for l in trecho_j7.splitlines() if l.startswith(f"| {ano} |")
+                               and l.count("|") == 6), None)
+        if not fpath_ano.exists() or linha_horaria is None:
+            print(f"[AUSENTE] linha de cobertura horária do ano {ano} não encontrada")
+            continue
+        campos_h = [c.strip() for c in linha_horaria.strip("|").split("|")]
+
+        dfc_ano = pd.read_parquet(fpath_ano, columns=["id_subsistema", "din_instante", "val_cmo"])
+        dfc_ano["id_subsistema"] = dfc_ano["id_subsistema"].astype(str)
+        sub_se_ano = dfc_ano[dfc_ano["id_subsistema"] == "SE"].copy()
+        horas_existentes_real = int(sub_se_ano["din_instante"].dt.floor("h").nunique())
+        checar(f"CMO {ano} horas existentes", horas_existentes_real, int(campos_h[1]))
+
+        val_ano = pd.to_numeric(sub_se_ano["val_cmo"], errors="coerce")
+        media_real = round(float(val_ano.mean()), 4)
+        checar(f"CMO {ano} média", media_real, float(campos_h[4]))
 
     print("\n=== RESUMO ===")
     if erros:

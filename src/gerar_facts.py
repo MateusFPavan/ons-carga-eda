@@ -668,6 +668,13 @@ def secao_j7_cobertura_anual_cmo() -> dict:
         dias_ausentes = sorted(set(calendario_ate_ultimo_dia) - dias_presentes)
         n_esperado_grade_completa = len(calendario_ate_ultimo_dia) * 48
 
+        # cobertura em base HORÁRIA (dias x 24) — granularidade que o projeto de
+        # fato usa (carregar_cmo_horario_se agrega 30min->60min); distinta da
+        # contagem em semi-horas (granularidade nativa do arquivo) já acima.
+        horas_existentes = sub_se["din_instante"].dt.floor("h").nunique()
+        horas_esperadas = len(calendario_ate_ultimo_dia) * 24
+        pct_cobertura_horaria = horas_existentes / horas_esperadas * 100 if horas_esperadas else None
+
         por_ano[ano] = {
             "arquivo_existe": True,
             "n_linhas_se": int(len(sub_se)),
@@ -675,6 +682,9 @@ def secao_j7_cobertura_anual_cmo() -> dict:
             "ultimo_instante": str(ultimo),
             "ano_completo_no_arquivo": bool(ultimo.date() >= pd.Timestamp(f"{ano}-12-31").date()),
             "n_esperado_grade_completa_30min_ate_ultimo_dia": n_esperado_grade_completa,
+            "horas_existentes": int(horas_existentes),
+            "horas_esperadas": int(horas_esperadas),
+            "pct_cobertura_horaria": pct_cobertura_horaria,
             "dias_ausentes_ate_ultimo_dia": [str(d) for d in dias_ausentes],
             "val_cmo_n_validos": int(val.notna().sum()),
             "val_cmo_n_nulo": int(val.isna().sum()),
@@ -682,6 +692,7 @@ def secao_j7_cobertura_anual_cmo() -> dict:
             "val_cmo_n_zeros": int((val == 0).sum()),
             "val_cmo_min": float(val.min()) if val.notna().any() else None,
             "val_cmo_max": float(val.max()) if val.notna().any() else None,
+            "val_cmo_media": float(val.mean()) if val.notna().any() else None,
         }
     return {"anos": anos, "por_ano": por_ano}
 
@@ -1349,6 +1360,16 @@ def renderizar(a, b, c, d, e, f, g, j, j7, k, l, timestamps_dst_1519) -> str:
               f"`{info['primeiro_instante']}` a `{info['ultimo_instante']}` | {n_ausentes} | "
               f"{info['val_cmo_n_nulo']} | {info['val_cmo_n_negativos']} | {info['val_cmo_n_zeros']} | "
               f"{info['val_cmo_min']:.4f} | {info['val_cmo_max']:.4f} |")
+        W("")
+        W("Cobertura em base HORÁRIA (dias × 24h — granularidade que o projeto de fato usa,")
+        W("`carregar_cmo_horario_se` agrega 30min→60min) e média do CMO, para os anos presentes:")
+        W("")
+        W("| Ano | Horas existentes | Horas esperadas | % cobertura horária | Média (R$/MWh) |")
+        W("|---|---|---|---|---|")
+        for ano in (2024, 2025, 2026):
+            info = j7["por_ano"][ano]
+            W(f"| {ano} | {info['horas_existentes']} | {info['horas_esperadas']} | "
+              f"{info['pct_cobertura_horaria']:.4f}% | {info['val_cmo_media']:.4f} |")
         W("")
         anos_ausentes_lista = [str(a) for a in j7["anos"] if not j7["por_ano"][a]["arquivo_existe"]]
         W(f"**{len(anos_ausentes_lista)} ano(s) sem arquivo baixado: {', '.join(anos_ausentes_lista)}.** "
