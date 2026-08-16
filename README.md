@@ -16,6 +16,7 @@ Brazil's grid operator schedules generation a day in advance. Under-forecast dem
 - **Modeled dispatch cost of error fell ~65%** — R\$8.52bn → R\$3.01bn over ~2.5 years, achieved zero-shot on a laptop CPU with no training.
 - **Ranking by accuracy ≠ ranking by cost** — two models swap places between the two metrics, because ~25% of cost concentrates in the top 10% of price hours. Optimizing the standard statistical metric would select the costlier model.
 - **Uncertainty bands are trustworthy** — 88.9% empirical coverage at a 90% nominal interval, usable for sizing a reserve margin.
+- **The result holds up under stress-testing** — the foundation model still wins when under-forecasting is penalized up to 3× more than over-forecasting (operationally realistic, since shortfalls risk load shedding), and still wins when re-scored on only the forecast days that postdate the model's public release, ruling out memorization of this specific dataset.
 
 ## Business impact
 
