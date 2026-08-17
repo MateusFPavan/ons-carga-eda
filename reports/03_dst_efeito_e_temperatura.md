@@ -106,8 +106,8 @@ só o formato relativo do dia.
 | 23h | 36.706,15 | 41.106,22 | 1,0620 | 1,0439 |
 
 Gráficos (sobreposição com_dst × sem_dst, bruto e normalizado, lado a lado):
-[`figures/f_dst_efeito_perfil_dia_util.png`](figures/f_dst_efeito_perfil_dia_util.png),
-[`figures/f_dst_efeito_perfil_fim_de_semana.png`](figures/f_dst_efeito_perfil_fim_de_semana.png).
+[`figures/f1_dst_efeito_perfil_dia_util.png`](figures/f1_dst_efeito_perfil_dia_util.png),
+[`figures/f2_dst_efeito_perfil_fim_de_semana.png`](figures/f2_dst_efeito_perfil_fim_de_semana.png).
 
 ## A2 / A3. Pico noturno, valor do pico e razão pico/vale, por regime
 

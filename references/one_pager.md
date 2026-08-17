@@ -40,6 +40,3 @@ Brazil's grid operator schedules generation a day in advance. Under-predict dema
 **Repository:** [https://github.com/MateusFPavan/ons-carga-eda](https://github.com/MateusFPavan/ons-carga-eda) · **Full technical report:** [`docs/technical_report.md`](../docs/technical_report.md) · **Contact:** [mateusfardinpavan@gmail.com](mailto:mateusfardinpavan@gmail.com) · [LinkedIn](https://www.linkedin.com/in/mateus-fardin-pavan)
 
 *The cost figure is a transparent estimate — each hour's error priced at that hour's official marginal generation cost — not audited operator accounting. Full methodology and limitations in the report.*
-
----
-*Assumed location: `references/one_pager.md`. Move to repo root for immediate recruiter visibility.*

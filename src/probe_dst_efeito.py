@@ -161,7 +161,8 @@ def main():
         json.dump(resultado, f, indent=2, ensure_ascii=False, default=str)
 
     # gráficos: bruto e normalizado, dia útil e fim de semana, 4 curvas cada (2 regimes x bruto/norm já separado em 2 figuras)
-    for tipo_dia, nome_arquivo_sufixo in [("dia_util", "dia_util"), ("fim_de_semana", "fim_de_semana")]:
+    # prefixo f1/f2 (não só "f_") para deixar explícito que as duas figuras são um par
+    for tipo_dia, prefixo in [("dia_util", "f1"), ("fim_de_semana", "f2")]:
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
         for ax, (usar_norm, titulo) in zip(axes, [(False, "bruto (MW médios)"), (True, "normalizado (fração da média diária)")]):
             for regime_nome, cor in [("com_dst", "tab:blue"), ("sem_dst", "tab:red")]:
@@ -173,9 +174,10 @@ def main():
             ax.set_xticks(range(0, 24, 2))
             ax.legend()
         fig.tight_layout()
-        fig.savefig(FIG_DIR / f"f_dst_efeito_perfil_{nome_arquivo_sufixo}.png", dpi=120)
+        nome_arquivo = f"{prefixo}_dst_efeito_perfil_{tipo_dia}.png"
+        fig.savefig(FIG_DIR / nome_arquivo, dpi=120)
         plt.close(fig)
-        print(f"Salvo: f_dst_efeito_perfil_{nome_arquivo_sufixo}.png")
+        print(f"Salvo: {nome_arquivo}")
 
 
 if __name__ == "__main__":

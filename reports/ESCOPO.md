@@ -1,9 +1,27 @@
 # Escopo do Projeto 3 — Previsão de Carga SE/CO e Custo do Erro
 
+> **Nota de status (adicionada 2026-08-17, seções 9/10/13 atualizadas
+> 2026-08-19):** este era o documento de **planejamento pré-modelagem** do
+> projeto — escrito antes de qualquer modelo ser rodado. O projeto **foi
+> concluído** desde então, e as seções 9, 10 e 13 já foram reescritas para
+> refletir o estado final (modelos comparados, estacionariedade testada, método
+> de incerteza decidido), com os números conferidos contra `reports/FACTS.md`.
+> **TimesFM 2.5 não foi avaliado** — permaneceu no plano original (§9) mas não há,
+> em nenhum lugar deste repositório (código, `FACTS.md`, commits), evidência de
+> que tenha sido de fato rodado; saiu do escopo silenciosamente, não foi "avaliado
+> e descartado" (ver §9 para o detalhe). **Para os números finais, `reports/FACTS.md`
+> (canônico) e `docs/technical_report.md` continuam a fonte primária** — o resto
+> deste documento (decisões de escopo ainda válidas: seções 1-8, 11-12, 14-17)
+> permanece registro da decisão original, não recalculado aqui.
+
 Nenhum número neste documento foi calculado aqui. Todo valor citado vem de
 [`reports/FACTS.md`](FACTS.md), a folha de fatos gerada por código a partir do dado
-bruto. Onde uma seção descreve trabalho ainda não feito (modelagem, validação), isso
-está marcado explicitamente como plano, não como fato medido.
+bruto (ou, para números de avaliação de modelo — seções 9, 10, 12f, 13 — de
+`docs/technical_report.md` e dos scripts de modelo, conferidos contra `FACTS.md`
+onde aplicável). As seções 9, 10 e 13 já foram atualizadas para o estado final;
+onde alguma outra seção ainda descrever trabalho não feito ou exploração possível
+(seção 16, "Extensões possíveis"), isso está marcado explicitamente como plano,
+não como fato medido.
 
 ---
 
@@ -162,14 +180,27 @@ Quatro casos, verificados na sondagem:
 
 ## 9. Modelos, em ordem de prova
 
-1. Sazonal-naive (baseline).
-2. SARIMA / Prophet.
-3. TimesFM 2.5 e Chronos-2, zero-shot.
+**Atualizado — estado final, ver nota de status no topo do documento.** Ordem de
+prova efetivamente executada, cada modelo avaliado sob a mesma divisão temporal
+(seção 11) e conferido contra `reports/FACTS.md`:
 
-Esta é a ordem planejada de avaliação — cada modelo só avança se justificar o custo
-de complexidade adicional sobre o anterior. Nenhum resultado de modelo (além do
-sazonal-naive usado como instrumento de medição nas sondagens já feitas) existe
-ainda.
+1. Sazonal-naive (régua, lag=168h) — MASE(sazonal) 1,2732.
+2. SARIMA (1,1,1)(1,0,1,24) — MASE(sazonal) 1,3412 (pior que a régua por MASE, mas
+   mais barato por custo — seção 12c). Prophet — MASE(sazonal) 1,1669.
+3. Chronos-2 (120M, zero-shot, contexto 2048h) — MASE(sazonal) 0,4363, o vencedor
+   decisivo. Números completos, custo e calibração: `reports/FACTS.md`,
+   `docs/technical_report.md`.
+
+**TimesFM 2.5 — não avaliado, achado registrado nesta atualização:** a versão
+anterior deste documento listava TimesFM 2.5 junto com Chronos-2 como foundation
+models planejados. Não há, em nenhum lugar do repositório (código, `FACTS.md`,
+histórico de commits), evidência de que TimesFM 2.5 tenha sido de fato rodado —
+nenhum script, nenhum resultado salvo, nenhuma menção fora deste arquivo. A
+caracterização correta é: TimesFM 2.5 **saiu do escopo silenciosamente**, não foi
+"avaliado e descartado" (o que implicaria uma rodada com resultado rejeitado). Só
+Chronos-2 foi de fato avaliado entre os foundation models. Se TimesFM 2.5 foi
+testado fora deste repositório, isso não está registrado aqui e não pode ser
+citado como fato do projeto.
 
 **Referência externa:** Simeone (2026, arXiv:2602.10848) avaliou quatro foundation
 models (Chronos-Bolt, Chronos-2, Moirai-2, TinyTimeMixer) contra Prophet, SARIMA e
@@ -178,24 +209,37 @@ consumidor. Reportou MASE ~0,31 em contexto longo (2048h, day-ahead), redução 
 sobre o Seasonal Naive, e calibração variável entre modelos (Chronos-2 bem calibrado;
 Moirai-2 e Prophet superconfiantes).
 
-Este resultado é tratado como HIPÓTESE A TESTAR no contexto brasileiro, NÃO como
-conclusão a reproduzir. A pergunta "foundation model bate a baseline clássica"
-permanece ABERTA para o SE/CO até ser medida no dado brasileiro. O dado do ERCOT não
-contém as três quebras estruturais brasileiras (fim do DST em 2019, pandemia, grade
-temporal) nem preço de despacho brasileiro. Convergência com Simeone (MASE próximo de
-0,31) confirmaria o achado fora do contexto original; divergência seria o ponto de
-partida para investigar as particularidades do SE/CO. Contexto de 2048h é adotado
-como configuração de referência dos foundation models, seguindo o protocolo dele.
+**Resultado medido no SE/CO:** MASE(sazonal) do Chronos-2 aqui é 0,4363 — pior
+(maior) que o ~0,31 de Simeone no ERCOT. **Isto NÃO é reprodução do resultado de
+Simeone** — dado diferente (SE/CO vs. ERCOT), país diferente, quebras estruturais
+diferentes (`src/modelo_chronos2.py`, impresso no stdout de cada rodada). A
+CONCLUSÃO QUALITATIVA converge (foundation model zero-shot bate as baselines
+clássicas por margem grande nos dois países); o NÚMERO não converge, e não era
+esperado convergir. Contexto de 2048h foi de fato a configuração vencedora entre as
+testadas (96 a 2048h, monótono), seguindo o protocolo de Simeone como ponto de
+partida, não como alvo a bater.
 
 ---
 
 ## 10. Estacionariedade e sazonalidade
 
-A testar, não assumir. Antes de ajustar qualquer modelo estatístico (SARIMA/Prophet),
-a série de carga do SE/CO será testada formalmente quanto a estacionariedade e
-sazonalidade — não presumida a partir da inspeção visual dos gráficos já produzidos
-na sondagem. Nenhum teste estatístico de estacionariedade foi rodado até este ponto
-do projeto.
+**Atualizado — estado final, ver nota de status no topo do documento.** Testada
+formalmente antes de ajustar o SARIMA, não presumida da inspeção visual. Fonte:
+docstring de `src/modelo_sarima.py` (decisão de método do modelo, não fato de dado
+bruto — por isso não está em `reports/FACTS.md`, que cobre só dado bruto).
+
+ADF e KPSS rodados em 4 janelas representativas de 60 dias, espalhadas por
+2023-2026. **Ao nível bruto:** ADF sempre rejeita raiz unitária (p≈0) mas KPSS
+rejeita estacionariedade em 3 das 4 janelas (p=0,01) — o conflito clássico
+ADF-estacionário/KPSS-não-estacionário. **Após 1 diferença regular (d=1):** ADF e
+KPSS concordam em estacionariedade nas 4 janelas. Diferenciação sazonal adicional
+(D=1) foi testada e não mudou essa conclusão nem foi necessária além de d=1.
+
+**Decisão tomada:** d=1, D=0 — a sazonalidade diária é capturada pelos termos
+AR/MA sazonais em s=24, não por diferenciação sazonal. Ordem final do SARIMA:
+(1,1,1)(1,0,1,24) — escolhida com esta evidência, não por busca em grade
+exaustiva (SARIMA é baseline, não otimizado exaustivamente, por restrição
+explícita da tarefa).
 
 ---
 
@@ -273,6 +317,14 @@ O limiar do decil 90 do CMO médio horário (SE, 2024) é 359,8710 R$/MWh. As 86
 acima desse limiar concentram **47,2269%** do custo total do ano (variante média).
 Menos de 10% das horas respondem por quase metade do custo anual.
 
+**Atualização (`FACTS.md`, número canônico atual):** o 47,2269% acima é
+**só de 2024** — não é o número usado no relatório final. Sobre o período de
+avaliação completo (2024-01-01 a 2026-07-15), a concentração é **25,2248%**
+do custo nas 10% horas de CMO mais alto. Os dois números medem escopos
+diferentes (um ano vs. o período de teste inteiro); citar um sem o outro
+gerou confusão numa leitura anterior deste documento — por isso ambos ficam
+registrados aqui, com a fonte de cada um.
+
 **Consequência para a validação:** um modelo pode ter um MAPE médio baixo no ano
 inteiro e ainda assim ter custo alto, se seus piores erros caírem justamente nas
 horas de CMO mais alto. A avaliação de cada modelo (seção 11) vai reportar o erro
@@ -346,11 +398,30 @@ ranking): `reports/FACTS.md` seção L, `reports/tabela_custo_assimetrico.csv`,
 
 ## 13. Incerteza
 
-A previsão será reportada com intervalo, não só ponto — a definir o método
-(quantis, conformal prediction, ou intervalo paramétrico do próprio modelo,
-dependendo de qual dos modelos da seção 9 for usado). Nenhuma decisão de método de
-intervalo foi tomada até este ponto; registrado aqui como requisito, não como fato
-já implementado.
+**Atualizado — estado final, ver nota de status no topo do documento.** Método
+decidido: **quantis**, nativos de cada modelo onde disponível — conformal
+prediction foi considerado nesta seção original, mas não foi necessário nem
+usado, já que os quantis nativos/paramétricos bastaram. Bandas reportadas:
+P10-P90 (80% nominal) e P05-P95 (90% nominal), exceto o naive semanal, que é uma
+regra pontual sem incerteza (nenhum intervalo).
+
+- **Chronos-2:** quantis nativos do modelo (`predict_quantiles`, níveis
+  [0,05, 0,1, 0,5, 0,9, 0,95] — `docs/MODEL_CARD.md` seção 7).
+- **SARIMA:** ponto e banda de `get_forecast()` — determinístico desde sempre,
+  nenhuma correção necessária.
+- **Prophet:** ponto de `predict()` (determinístico) + banda de
+  `predictive_samples()`. **Correção de reprodutibilidade registrada:** a mediana
+  precisou vir de `predict()`, não da mediana amostral de `predictive_samples()`
+  — esta última introduzia ruído de reamostragem não controlado pela seed,
+  confundível com vazamento de dado num teste de vazamento ingênuo. Diagnosticado
+  e corrigido; ver docstring de `src/modelo_prophet.py`. Não se aplica a SARIMA
+  nem a Chronos-2.
+
+**Calibração medida** (`reports/tabela_comparativa.csv`, cobertura empírica vs.
+nominal): Chronos-2 é o mais próximo do nominal nos dois níveis (79,35% @80%,
+88,93% @90%); SARIMA super-cobre (84,48% @80%, 92,52% @90% — banda larga demais);
+Prophet sub-cobre levemente (76,47% @80%, 86,20% @90% — banda estreita demais).
+Gráfico: `reports/figures/resultado_7_calibracao.png`.
 
 ---
 
